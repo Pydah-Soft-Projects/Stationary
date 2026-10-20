@@ -1,7 +1,7 @@
 module.exports = {
   apps: [
     {
-      name: "backend",
+      name: "stationary-backend",
       script: "server.js",
       cwd: __dirname,
       instances: 1,
