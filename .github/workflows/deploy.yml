@@ -1,4 +1,4 @@
-name: Deploy Backend
+name: Deploy Frontend & Backend
 
 on:
   push:
@@ -6,20 +6,141 @@ on:
       - main
     paths:
       - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
 
 jobs:
   deploy:
+    name: Build & Deploy
     runs-on: ubuntu-latest
 
     steps:
-    - name: Deploy to Lightsail
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.HOST_DNS }}
-        username: ${{ secrets.USERNAME }}
-        key: ${{ secrets.EC2_SSH_KEY }}
-        script: |
-          cd ${{ secrets.TARGET_DIR }}
-          git pull origin main
-          npm install
-          pm2 restart all
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Check Changed Paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - '.github/workflows/deploy.yml'
+            backend:
+              - 'backend/**'
+              - '.github/workflows/deploy.yml'
+
+      - name: Setup Node.js (Frontend)
+        if: steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Cache Frontend Dependencies
+        if: steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+        id: frontend-cache
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: ${{ runner.os }}-frontend-modules-${{ hashFiles('frontend/package-lock.json', 'frontend/package.json') }}
+
+      - name: Install Frontend Dependencies
+        if: (steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch') && steps.frontend-cache.outputs.cache-hit != 'true'
+        working-directory: frontend
+        run: npm install
+
+      - name: Build Frontend
+        if: steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+        run: |
+          npm run build
+          tar -czf ../dist.tar.gz -C dist .
+
+      - name: Upload Frontend Build to Server
+        if: steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_IP || secrets.HOST_DNS }}
+          username: ${{ secrets.USERNAME || 'ec2-user' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "dist.tar.gz"
+          target: ${{ secrets.TARGET_DIR || 'Stationary' }}
+
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_IP || secrets.HOST_DNS }}
+          username: ${{ secrets.USERNAME || 'ec2-user' }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            TARGET_DIR="${{ secrets.TARGET_DIR || 'Stationary' }}"
+            if [ -d "$TARGET_DIR" ]; then
+              cd "$TARGET_DIR"
+            elif [ -d "$HOME/$TARGET_DIR" ]; then
+              cd "$HOME/$TARGET_DIR"
+            else
+              echo "❌ Target directory $TARGET_DIR not found!"
+              exit 1
+            fi
+            echo "📂 Working directory: $(pwd)"
+
+            # Deploy frontend build if uploaded
+            if [ -f "dist.tar.gz" ]; then
+              echo "📦 Deploying new frontend build..."
+              mkdir -p frontend/dist
+              rm -rf frontend/dist/*
+              tar -xzf dist.tar.gz -C frontend/dist
+              rm -f dist.tar.gz
+              chmod -R 755 frontend/dist
+              echo "✅ Frontend build successfully deployed to frontend/dist."
+            fi
+
+            # Pull latest changes from git
+            echo "🔄 Pulling latest changes from git..."
+            PREV_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
+            git pull origin main
+            NEW_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
+
+            # Check if backend or root dependencies changed
+            PKG_CHANGED=false
+            if [ -n "$PREV_COMMIT" ] && [ "$PREV_COMMIT" != "$NEW_COMMIT" ]; then
+              if git diff --name-only "$PREV_COMMIT" "$NEW_COMMIT" 2>/dev/null | grep -q -E '(^|/)backend/package(-lock)?\.json$|^package(-lock)?\.json$'; then
+                echo "📦 Package configuration changes detected."
+                PKG_CHANGED=true
+              fi
+            fi
+
+            # Check if node_modules is missing
+            if [ -d "backend" ] && [ ! -d "backend/node_modules" ]; then
+              echo "⚠️ backend/node_modules directory is missing."
+              PKG_CHANGED=true
+            elif [ ! -d "backend" ] && [ ! -d "node_modules" ] && [ -f "package.json" ]; then
+              echo "⚠️ node_modules directory is missing."
+              PKG_CHANGED=true
+            fi
+
+            # Install dependencies only if packages changed or node_modules missing
+            if [ "$PKG_CHANGED" = true ]; then
+              echo "📥 Installing backend node packages..."
+              if [ -d "backend" ] && [ -f "backend/package.json" ]; then
+                cd backend && npm install && cd ..
+              elif [ -f "package.json" ]; then
+                npm install
+              fi
+            else
+              echo "⏩ Node packages have not changed. Skipping npm install."
+            fi
+
+            # Restart/Reload processes with PM2 ecosystem
+            echo "🚀 Reloading backend with PM2 ecosystem..."
+            if [ -f "backend/ecosystem.config.js" ]; then
+              pm2 startOrReload backend/ecosystem.config.js --update-env
+            elif [ -f "ecosystem.config.js" ]; then
+              pm2 startOrReload ecosystem.config.js --update-env
+            else
+              pm2 restart all
+            fi
+            pm2 save

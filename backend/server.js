@@ -32,6 +32,8 @@ connectEmployeeDB();
 
 // CORS configuration
 const allowedOrigins = [
+  "https://stationary.pydah.edu.in",
+  "http://stationary.pydah.edu.in",
   "https://pydah-stationary-management.vercel.app",
   "http://localhost:5173",
   "http://localhost:5000",
