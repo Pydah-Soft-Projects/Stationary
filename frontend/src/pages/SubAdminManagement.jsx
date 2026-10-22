@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Plus, Edit, Trash2, X, Eye, Edit2, AlertCircle } from 'lucide-react';
+import { Users, Plus, Edit, Trash2, X, Eye, Edit2, AlertCircle, Search, Briefcase, CheckCircle2 } from 'lucide-react';
 import { apiUrl } from '../utils/api';
 import { parsePermission, permissionsToObject, objectToPermissions } from '../utils/permissions';
 
@@ -113,6 +113,11 @@ const SubAdminModal = ({ isOpen, onClose, onSave, subAdmin }) => {
   const [colleges, setColleges] = useState([]);
   const [assignedCollege, setAssignedCollege] = useState(subAdmin?.assignedCollege?._id || subAdmin?.assignedCollege || subAdmin?.assignedBranch?._id || subAdmin?.assignedBranch || '');
   const [coursePermissions, setCoursePermissions] = useState({}); // Object format: { 'course-name': 'view' | 'full' }
+  const [employeeInfo, setEmployeeInfo] = useState(subAdmin?.employeeDetails || null);
+  const [isHrmsEmployee, setIsHrmsEmployee] = useState(!!subAdmin?.isHrmsEmployee);
+  const [modalSearchQuery, setModalSearchQuery] = useState('');
+  const [modalSearchResults, setModalSearchResults] = useState([]);
+  const [modalSearching, setModalSearching] = useState(false);
 
   // Fetch courses and branches when modal opens
   useEffect(() => {
@@ -150,11 +155,43 @@ const SubAdminModal = ({ isOpen, onClose, onSave, subAdmin }) => {
     }
   }, [isOpen]);
 
+  // Search HRMS employees inside modal
+  useEffect(() => {
+    const trimmed = modalSearchQuery.trim();
+    if (trimmed.length < 2) {
+      setModalSearchResults([]);
+      setModalSearching(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setModalSearching(true);
+      try {
+        const res = await fetch(apiUrl(`/api/employees?search=${encodeURIComponent(trimmed)}&limit=5`));
+        if (res.ok) {
+          const data = await res.json();
+          const rows = data.rows || (Array.isArray(data) ? data : []);
+          setModalSearchResults(rows);
+        }
+      } catch (err) {
+        console.warn('Failed to search employee in modal:', err);
+      } finally {
+        setModalSearching(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [modalSearchQuery]);
+
   useEffect(() => {
     if (isOpen) {
       setName(subAdmin?.name || '');
       setRole(subAdmin?.role || 'Editor');
       setPassword(''); // Always clear password field when modal opens
+      setEmployeeInfo(subAdmin?.employeeDetails || null);
+      setIsHrmsEmployee(!!subAdmin?.isHrmsEmployee);
+      setModalSearchQuery('');
+      setModalSearchResults([]);
       const sourcePerms = Array.isArray(subAdmin?.permissions) ? subAdmin.permissions : [];
       const normalized = normalizePermissions(sourcePerms);
       // Convert to object format for easier state management
@@ -242,12 +279,13 @@ const SubAdminModal = ({ isOpen, onClose, onSave, subAdmin }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!subAdmin && !password) {
-      alert('Password is required for new sub-admins.');
+    const isLinkedEmployee = !!subAdmin?.id || !!isHrmsEmployee || !!employeeInfo;
+    if (!isLinkedEmployee && !password) {
+      alert('Password is required for new users who are not HRMS employees.');
       return;
     }
-    // Set default role for new sub-admins and only include password if it has been set
-    const submissionRole = subAdmin ? role : 'Editor';
+    // Set default role for new users and only include password if it has been set
+    const submissionRole = subAdmin?.id ? role : 'Editor';
     // Convert permissions object back to array format
     const cleanedPermissions = objectToPermissions(permissions);
     onSave({
@@ -266,36 +304,104 @@ const SubAdminModal = ({ isOpen, onClose, onSave, subAdmin }) => {
     <div className="fixed inset-0 flex justify-center items-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.1)' }}>
       <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-4xl mx-4 border border-gray-200 transform transition-all duration-300 scale-100 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">{subAdmin ? 'Edit' : 'Create'} Sub-Admin</h2>
+          <h2 className="text-2xl font-bold text-gray-900">
+            {subAdmin?.id ? 'Edit User Features' : (employeeInfo ? `Configure Features: ${employeeInfo.name}` : 'Create User & Assign Features')}
+          </h2>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 text-gray-500 hover:text-gray-700 transition-colors duration-200">
             <X size={24} />
           </button>
         </div>
         <form onSubmit={handleSubmit}>
+          {/* Employee Info Header Banner if selected */}
+          {employeeInfo ? (
+            <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-gray-900 text-base">{employeeInfo.name}</h3>
+                  <span className="px-2 py-0.5 bg-blue-600 text-white text-xs font-mono rounded">
+                    ID: {employeeInfo.empNo}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-600 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                  {employeeInfo.department && <span>Dept: <strong className="text-gray-800">{employeeInfo.department}</strong></span>}
+                  {employeeInfo.designation && <span>Desig: <strong className="text-gray-800">{employeeInfo.designation}</strong></span>}
+                  {employeeInfo.division && <span>Division: <strong className="text-gray-800">{employeeInfo.division}</strong></span>}
+                </p>
+              </div>
+              <span className="text-xs font-semibold px-2.5 py-1 bg-blue-100 text-blue-800 rounded-lg whitespace-nowrap">
+                HRMS Employee
+              </span>
+            </div>
+          ) : !subAdmin?.id && (
+            <div className="mb-6 p-4 bg-slate-50 border border-slate-200 rounded-2xl">
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5 flex items-center gap-1.5">
+                <Search size={14} className="text-blue-600" />
+                Search HRMS Employee to Auto-Fill
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={modalSearchQuery}
+                  onChange={(e) => setModalSearchQuery(e.target.value)}
+                  placeholder="Type employee name or Emp ID to search HRMS..."
+                  className="w-full px-3.5 py-2 text-sm bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {modalSearching && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">Searching...</span>
+                )}
+              </div>
+              {modalSearchResults.length > 0 && (
+                <div className="mt-2 bg-white border border-gray-200 rounded-xl shadow-lg max-h-48 overflow-y-auto divide-y divide-gray-100">
+                  {modalSearchResults.map((emp) => (
+                    <div
+                      key={emp.id}
+                      onClick={() => {
+                        setName(emp.empNo || emp.name);
+                        setEmployeeInfo(emp);
+                        setIsHrmsEmployee(true);
+                        setModalSearchResults([]);
+                        setModalSearchQuery('');
+                      }}
+                      className="p-2.5 hover:bg-blue-50 cursor-pointer flex items-center justify-between text-xs"
+                    >
+                      <div>
+                        <span className="font-semibold text-gray-900">{emp.name}</span>
+                        <span className="ml-2 text-gray-500 font-mono">({emp.empNo})</span>
+                        <span className="ml-2 text-gray-400">{emp.department || ''}</span>
+                      </div>
+                      <span className="text-blue-600 font-medium hover:underline">Select</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="mb-5">
-            <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">Name</label>
+            <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">Name / Emp ID</label>
             <input
               id="name"
               type="text"
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter sub-admin name"
+              placeholder="Enter name or Emp ID"
               required
             />
           </div>
           <div className="mb-6">
-            <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">Password</label>
+            <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">
+              Password {employeeInfo && <span className="text-xs font-normal text-gray-500">(Optional - uses HRMS credentials)</span>}
+            </label>
             <input
               id="password"
               type="password"
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={subAdmin ? "Enter new password to change" : "Enter password"}
-              required={!subAdmin} // Password is required only for new sub-admins
+              placeholder={employeeInfo ? "Leave blank to use HRMS password" : (subAdmin?.id ? "Enter new password to change" : "Enter password")}
+              required={!subAdmin?.id && !employeeInfo && !isHrmsEmployee}
             />
-
           </div>
 
           <div className="mb-6">
@@ -596,7 +702,7 @@ const SubAdminModal = ({ isOpen, onClose, onSave, subAdmin }) => {
               Cancel
             </button>
             <button type="submit" className="px-6 py-3 bg-blue-700 text-white rounded-xl font-medium hover:from-indigo-600 hover:to-indigo-700 transform hover:scale-105 transition-all duration-200 shadow-lg">
-              {subAdmin ? 'Update Sub-Admin' : 'Create Sub-Admin'}
+              {subAdmin ? 'Update User' : 'Create User'}
             </button>
           </div>
         </form>
@@ -609,36 +715,38 @@ const SubAdminManagement = ({ currentUser }) => {
   const [subAdmins, setSubAdmins] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubAdmin, setEditingSubAdmin] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Check if current user is super admin
   const isSuperAdmin = currentUser?.role === 'Administrator';
 
-  useEffect(() => {
-    const fetchSubAdmins = async () => {
-      try {
-        const response = await fetch(apiUrl('/api/subadmins'));
-        if (!response.ok) {
-          throw new Error(`Failed to load: ${response.status} ${response.statusText}`);
-        }
-        const contentType = response.headers.get('content-type') || '';
-        if (!contentType.includes('application/json')) {
-          throw new Error('Unexpected response from server');
-        }
-        const data = await response.json();
-        const list = Array.isArray(data) ? data : [];
-        setSubAdmins(
-          list.map(sa => ({
-            ...sa,
-            id: sa._id,
-            permissions: normalizePermissions(sa.permissions),
-          }))
-        );
-      } catch (error) {
-        console.error("Failed to fetch sub-admins:", error);
+  const fetchSubAdmins = React.useCallback(async () => {
+    try {
+      const response = await fetch(apiUrl('/api/subadmins'));
+      if (!response.ok) {
+        throw new Error(`Failed to load: ${response.status} ${response.statusText}`);
       }
-    };
-    fetchSubAdmins();
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        throw new Error('Unexpected response from server');
+      }
+      const data = await response.json();
+      const list = Array.isArray(data) ? data : [];
+      setSubAdmins(
+        list.map(sa => ({
+          ...sa,
+          id: sa._id,
+          permissions: normalizePermissions(sa.permissions),
+        }))
+      );
+    } catch (error) {
+      console.error("Failed to fetch sub-admins:", error);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchSubAdmins();
+  }, [fetchSubAdmins]);
 
   const handleCreate = () => {
     setEditingSubAdmin(null);
@@ -651,7 +759,7 @@ const SubAdminManagement = ({ currentUser }) => {
   };
 
   const handleDelete = (id) => {
-    if (!window.confirm('Are you sure you want to delete this sub-admin?')) return;
+    if (!window.confirm('Are you sure you want to delete this user?')) return;
 
     fetch(apiUrl(`/api/subadmins/${id}`), { method: 'DELETE' })
       .then(res => {
@@ -681,21 +789,24 @@ const SubAdminManagement = ({ currentUser }) => {
         throw new Error(errorData.message || 'Save operation failed');
       }
 
-      const savedSubAdmin = await response.json();
-      const formattedAdmin = {
-        ...savedSubAdmin,
-        id: savedSubAdmin._id,
-        permissions: normalizePermissions(savedSubAdmin.permissions),
-      };
-
-      setSubAdmins(prev => isUpdating
-        ? prev.map(sa => sa.id === formattedAdmin.id ? formattedAdmin : sa)
-        : [...prev, formattedAdmin]);
+      await fetchSubAdmins();
       setIsModalOpen(false);
     } catch (error) {
       alert(`Error: ${error.message}`);
     }
   };
+
+  const filteredSubAdmins = subAdmins.filter(sa => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    const nameMatch = sa.name && sa.name.toLowerCase().includes(q);
+    const roleMatch = sa.role && sa.role.toLowerCase().includes(q);
+    const collegeMatch = (sa.assignedCollege?.name && sa.assignedCollege.name.toLowerCase().includes(q)) ||
+                         (sa.assignedBranch?.name && sa.assignedBranch.name.toLowerCase().includes(q));
+    const empNameMatch = sa.employeeName && sa.employeeName.toLowerCase().includes(q);
+    const empNoMatch = sa.empNo && sa.empNo.toLowerCase().includes(q);
+    return nameMatch || roleMatch || collegeMatch || empNameMatch || empNoMatch;
+  });
 
   return (
     <>
@@ -708,24 +819,69 @@ const SubAdminManagement = ({ currentUser }) => {
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">
-                  Sub-Admin Management
+                  Usermanagement
                 </h1>
-                <p className="text-gray-600 mt-1">Manage your team of sub-administrators</p>
+                <p className="text-gray-600 mt-1">Search employees and customize their portal features and permissions</p>
               </div>
             </div>
           </div>
 
-          {subAdmins.length === 0 ? (
-            <div className="bg-blue-600 rounded-2xl shadow-lg p-12 text-center">
-              <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6 backdrop-blur-sm">
-                <Users size={48} className="text-white" />
+          {/* Search Bar & Action Header */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-between items-stretch sm:items-center mb-6">
+            <div className="relative flex-1 max-w-xl">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search configured users by Name, Emp ID, Role, College..."
+                className="w-full pl-10 pr-10 py-3 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm shadow-sm"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+
+            {isSuperAdmin && (
+              <button
+                onClick={handleCreate}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-semibold shadow-md hover:shadow-lg transform hover:scale-[1.02] transition-all duration-200 inline-flex items-center justify-center gap-2 whitespace-nowrap"
+              >
+                <Plus size={18} />
+                Create User
+              </button>
+            )}
+          </div>
+
+          {/* Configured Users Table */}
+          {filteredSubAdmins.length === 0 ? (
+            <div className="bg-white rounded-2xl shadow-lg p-12 text-center border border-gray-200">
+              <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Users size={36} className="text-blue-600" />
               </div>
-              <h3 className="text-xl font-semibold text-white mb-2">No Sub-Admins Yet</h3>
-              <p className="text-indigo-100 mb-6">Get started by creating your first sub-admin to help manage the system.</p>
-              {isSuperAdmin && (
-                <button onClick={handleCreate} className="bg-white text-blue-600 px-8 py-4 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 inline-flex items-center gap-2">
-                  <Plus size={20} />
-                  Create Your First Sub-Admin
+              <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                {searchQuery ? `No users matching "${searchQuery}"` : 'No Users Yet'}
+              </h3>
+              <p className="text-sm text-gray-500 mb-6">
+                {searchQuery ? 'No configured user matches your search. Try searching by username, name, or employee ID.' : 'Click Create User to assign features.'}
+              </p>
+              {searchQuery ? (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="px-5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium text-sm transition-colors"
+                >
+                  Clear Search
+                </button>
+              ) : isSuperAdmin && (
+                <button onClick={handleCreate} className="bg-blue-600 text-white px-6 py-2.5 rounded-xl font-semibold shadow hover:shadow-md transition-all inline-flex items-center gap-2 text-sm">
+                  <Plus size={18} />
+                  Create User
                 </button>
               )}
             </div>
@@ -733,38 +889,44 @@ const SubAdminManagement = ({ currentUser }) => {
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-200">
               <div className="p-6 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-gray-50 to-gray-100">
                 <h2 className="text-lg font-semibold text-gray-900">
-                  All Sub-Admins ({subAdmins.length})
+                  Configured Users ({filteredSubAdmins.length})
                 </h2>
-                {isSuperAdmin && (
-                  <button onClick={handleCreate} className="bg-blue-600 text-white px-6 py-2 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 inline-flex items-center gap-2">
-                    <Plus size={18} />
-                    Create Sub-Admin
-                  </button>
-                )}
               </div>
               <div className="divide-y divide-gray-100">
-                {subAdmins.map((subAdmin, index) => (
+                {filteredSubAdmins.map((subAdmin, index) => (
                   <div key={subAdmin.id} className={`p-6 hover:bg-indigo-50/50 transition-colors duration-200 ${index === 0 ? 'border-t-0' : ''}`}>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-4">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-md">
                           <span className="text-white font-bold text-lg">
-                            {subAdmin.name.charAt(0).toUpperCase()}
+                            {(subAdmin.employeeName || subAdmin.name || 'U').charAt(0).toUpperCase()}
                           </span>
                         </div>
                         <div>
-                          <h3 className="text-lg font-semibold text-gray-900">{subAdmin.name}</h3>
-                          <div className="text-sm text-gray-500 flex flex-col gap-0.5">
-                            <span>{subAdmin.role || 'Sub-Administrator'}</span>
-                            {subAdmin.assignedBranch && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <h3 className="text-lg font-semibold text-gray-900">{subAdmin.name}</h3>
+                            {subAdmin.employeeName && subAdmin.employeeName.toLowerCase() !== subAdmin.name.toLowerCase() && (
+                              <span className="text-sm font-medium text-gray-600">
+                                ({subAdmin.employeeName})
+                              </span>
+                            )}
+                            {subAdmin.empNo && subAdmin.empNo.toLowerCase() !== subAdmin.name.toLowerCase() && (
+                              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-mono rounded">
+                                ID: {subAdmin.empNo}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-500 flex flex-col gap-0.5 mt-0.5">
+                            <span>{subAdmin.role || 'User'}</span>
+                            {(subAdmin.assignedCollege || subAdmin.assignedBranch) && (
                               <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full w-fit">
-                                📍 {subAdmin.assignedBranch.name || 'Branch Assigned'}
+                                📍 {(subAdmin.assignedCollege?.name || subAdmin.assignedBranch?.name || 'College Assigned')}
                               </span>
                             )}
                           </div>
                           {Array.isArray(subAdmin.permissions) && subAdmin.permissions.length > 0 && (
                             <div className="mt-2 flex flex-wrap gap-1">
-                              {subAdmin.permissions.slice(0, 3).map((perm) => {
+                              {subAdmin.permissions.slice(0, 4).map((perm) => {
                                 const parsed = parsePermission(perm);
                                 const label = PERMISSION_LABELS[parsed.key];
                                 if (!label) return null;
@@ -781,9 +943,9 @@ const SubAdminManagement = ({ currentUser }) => {
                                   </span>
                                 );
                               })}
-                              {subAdmin.permissions.length > 3 && (
-                                <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
-                                  +{subAdmin.permissions.length - 3} more
+                              {subAdmin.permissions.length > 4 && (
+                                <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full font-medium">
+                                  +{subAdmin.permissions.length - 4} more features
                                 </span>
                               )}
                             </div>
@@ -794,15 +956,16 @@ const SubAdminManagement = ({ currentUser }) => {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleEdit(subAdmin)}
-                          className="p-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-600 hover:text-indigo-700 rounded-lg transition-all duration-200 transform hover:scale-105"
-                          title="Edit Sub-Admin"
+                          className="px-3 py-2 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded-lg transition-all duration-200 font-medium text-xs flex items-center gap-1.5"
+                          title="Edit Features"
                         >
-                          <Edit size={16} />
+                          <Edit size={14} />
+                          <span>Edit Features</span>
                         </button>
                         <button
                           onClick={() => handleDelete(subAdmin.id)}
-                          className="p-2 bg-red-100 hover:bg-red-200 text-red-600 hover:text-red-700 rounded-lg transition-all duration-200 transform hover:scale-105"
-                          title="Delete Sub-Admin"
+                          className="p-2 bg-red-100 hover:bg-red-200 text-red-600 hover:text-red-700 rounded-lg transition-all duration-200"
+                          title="Delete User"
                         >
                           <Trash2 size={16} />
                         </button>

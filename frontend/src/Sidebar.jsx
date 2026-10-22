@@ -2,9 +2,47 @@ import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Home, PlusCircle, Users, List, Settings, LogOut, ChevronLeft, ChevronRight, Menu, UserPlus, X, User, GraduationCap, Receipt, ClipboardList, ClipboardCheck, ArrowRightLeft, ShoppingCart, Briefcase, TrendingUp } from 'lucide-react';
 import { hasViewAccess } from './utils/permissions';
+import { apiUrl } from './utils/api';
 
 const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen, currentUser }) => {
   const location = useLocation();
+  const [employeeName, setEmployeeName] = useState(
+    currentUser?.employeeName || currentUser?.employee_name || null
+  );
+
+  useEffect(() => {
+    if (currentUser?.employeeName || currentUser?.employee_name) {
+      setEmployeeName(currentUser.employeeName || currentUser.employee_name);
+      return;
+    }
+
+    if (currentUser?.name) {
+      let isMounted = true;
+      fetch(apiUrl('/api/subadmins'))
+        .then(res => res.ok ? res.json() : [])
+        .then(list => {
+          if (!isMounted || !Array.isArray(list)) return;
+          const found = list.find(u =>
+            (u.name && String(u.name).toLowerCase() === String(currentUser.name).toLowerCase()) ||
+            (u.empNo && String(u.empNo).toLowerCase() === String(currentUser.name).toLowerCase())
+          );
+          if (found && found.employeeName) {
+            setEmployeeName(found.employeeName);
+            try {
+              const saved = JSON.parse(localStorage.getItem('currentUser') || '{}');
+              localStorage.setItem('currentUser', JSON.stringify({
+                ...saved,
+                employeeName: found.employeeName,
+                empNo: found.empNo
+              }));
+            } catch (e) {}
+          }
+        })
+        .catch(() => {});
+
+      return () => { isMounted = false; };
+    }
+  }, [currentUser]);
 
   // Close sidebar when clicking outside on mobile
   useEffect(() => {
@@ -32,7 +70,7 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
     // { path: '/student-management', label: 'Manage Students', icon: Users, permissionKey: 'student-management' }, // REMOVED
     { path: '/students-dashboard', label: 'Student Dashboard', icon: GraduationCap, permissionKey: 'course-dashboard' },
     { path: '/employees-dashboard', label: 'Employee Dashboard', icon: Briefcase, permissionKey: 'employee-dashboard' },
-    { path: '/sub-admin-management', label: 'Manage Sub-Admins', icon: UserPlus, superAdminOnly: true },
+    { path: '/sub-admin-management', label: 'Usermanagement', icon: UserPlus, superAdminOnly: true },
     { path: '/courses', label: 'College and Courses', icon: GraduationCap, permissionKey: 'courses' },
     { path: '/manage-stock', label: 'Academic Stock', icon: List, permissionKeys: ['stock-products', 'stock-add', 'stock-entries', 'stock-vendors', 'manage-stock'] },
     { path: '/stock-transfers', label: 'Stock Transfers', icon: ArrowRightLeft, permissionKey: 'stock-transfers' },
@@ -171,8 +209,10 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
                   </div>
                   <div className="flex items-center justify-between gap-3 flex-1 min-w-0">
                     <div className="flex flex-col leading-tight flex-1 min-w-0">
-                      <span className="font-semibold text-sm truncate">{currentUser.name}</span>
-                      <span className="text-xs text-slate-300">
+                      <span className="font-semibold text-sm truncate" title={employeeName || currentUser.employeeName || currentUser.employee_name || currentUser.name}>
+                        {employeeName || currentUser.employeeName || currentUser.employee_name || currentUser.name}
+                      </span>
+                      <span className="text-xs text-slate-300 truncate">
                         {isSuperAdmin ? 'Administrator' : 'Sub-Administrator'}
                       </span>
                     </div>

@@ -338,6 +338,10 @@ function App() {
       const token = data.token || `local-${data._id}`;
       const userData = {
         name: data.name,
+        employeeName: data.employeeName || data.employee_name || null,
+        employee_name: data.employee_name || data.employeeName || null,
+        empNo: data.empNo || data.emp_no || null,
+        emp_no: data.emp_no || data.empNo || null,
         role: data.role || 'Editor',
         id: data._id,
         permissions: data.permissions || [],
