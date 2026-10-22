@@ -19,26 +19,12 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Check Changed Paths
-        uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            frontend:
-              - 'frontend/**'
-              - '.github/workflows/deploy.yml'
-            backend:
-              - 'backend/**'
-              - '.github/workflows/deploy.yml'
-
       - name: Setup Node.js (Frontend)
-        if: steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Cache Frontend Dependencies
-        if: steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         id: frontend-cache
         uses: actions/cache@v4
         with:
@@ -46,12 +32,11 @@ jobs:
           key: ${{ runner.os }}-frontend-modules-${{ hashFiles('frontend/package-lock.json', 'frontend/package.json') }}
 
       - name: Install Frontend Dependencies
-        if: (steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch') && steps.frontend-cache.outputs.cache-hit != 'true'
+        if: steps.frontend-cache.outputs.cache-hit != 'true'
         working-directory: frontend
         run: npm install
 
       - name: Build Frontend
-        if: steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         working-directory: frontend
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
@@ -60,7 +45,6 @@ jobs:
           tar -czf ../dist.tar.gz -C dist .
 
       - name: Upload Frontend Build to Server
-        if: steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_IP || secrets.HOST_DNS }}
