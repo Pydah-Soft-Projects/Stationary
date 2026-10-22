@@ -96,11 +96,17 @@ const Login = ({ onLogin, onSSOLogin }) => {
           window.location.href = '/';
         }
       } else {
+        if (window.PydahSwitcher?.hideTransition) {
+          window.PydahSwitcher.hideTransition();
+        }
         setError(data?.message || 'Single Sign-On failed. Please enter your credentials.');
         setIsVerifyingSSO(false);
       }
     } catch (err) {
       console.error('SSO Login Failed:', err);
+      if (window.PydahSwitcher?.hideTransition) {
+        window.PydahSwitcher.hideTransition();
+      }
       setError('Single Sign-On connection failed. Please enter your credentials.');
       setIsVerifyingSSO(false);
     }
