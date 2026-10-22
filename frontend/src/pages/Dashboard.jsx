@@ -123,23 +123,27 @@ const Dashboard = () => {
     });
   };
 
+  const safeProducts = Array.isArray(products) ? products : [];
+  const safeColleges = Array.isArray(colleges) ? colleges : [];
+  const safeZeroStockDuesData = Array.isArray(zeroStockDuesData) ? zeroStockDuesData : [];
+
   // Calculate low stock products
-  const lowStockProducts = products.filter(product => {
-    const threshold = typeof product.lowStockThreshold === 'number' ? product.lowStockThreshold : 10;
-    return (product.stock || 0) < threshold;
+  const lowStockProducts = safeProducts.filter(product => {
+    const threshold = typeof product?.lowStockThreshold === 'number' ? product.lowStockThreshold : 10;
+    return (product?.stock || 0) < threshold;
   });
 
   // Calculate products with stock value
-  const productsWithValue = products.map(product => ({
+  const productsWithValue = safeProducts.map(product => ({
     ...product,
-    stockValue: (product.stock || 0) * (product.price || 0),
-  })).sort((a, b) => b.stockValue - a.stockValue);
+    stockValue: (product?.stock || 0) * (product?.price || 0),
+  })).sort((a, b) => (b?.stockValue || 0) - (a?.stockValue || 0));
 
   // Filter zero stock dues
-  const filteredZeroStockDues = zeroStockDuesData.filter(data => 
-    data.student?.name?.toLowerCase().includes(zeroStockSearch.toLowerCase()) ||
-    data.student?.studentId?.toLowerCase().includes(zeroStockSearch.toLowerCase()) ||
-    data.items?.some(item => item.toLowerCase().includes(zeroStockSearch.toLowerCase()))
+  const filteredZeroStockDues = safeZeroStockDues.filter(data => 
+    data?.student?.name?.toLowerCase().includes((zeroStockSearch || '').toLowerCase()) ||
+    data?.student?.studentId?.toLowerCase().includes((zeroStockSearch || '').toLowerCase()) ||
+    data?.items?.some(item => typeof item === 'string' && item.toLowerCase().includes((zeroStockSearch || '').toLowerCase()))
   );
 
   return (
@@ -161,7 +165,7 @@ const Dashboard = () => {
                 className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none cursor-pointer"
               >
                 <option value="">Central Warehouse (Global)</option>
-                {colleges.map(college => (
+                {safeColleges.map(college => (
                   <option key={college._id} value={college._id}>
                     {college.name}
                   </option>
@@ -177,7 +181,7 @@ const Dashboard = () => {
               <Building2 className="text-blue-600" size={18} />
               <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Campus:</span>
               <span className="text-sm font-bold text-blue-900">
-                {colleges.find(c => c._id === (typeof currentUser.assignedCollege === 'object' ? currentUser.assignedCollege._id : currentUser.assignedCollege))?.name || 'Loading...'}
+                {safeColleges.find(c => String(c._id) === String(typeof currentUser.assignedCollege === 'object' ? currentUser.assignedCollege?._id : currentUser.assignedCollege))?.name || 'Assigned Campus'}
               </span>
             </div>
           )}
@@ -197,7 +201,7 @@ const Dashboard = () => {
               {loading ? (
                 <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
-                stats.totalStudents.toLocaleString()
+                (stats?.totalStudents || 0).toLocaleString()
               )}
             </div>
             <div className="text-blue-100 text-sm font-medium">Total Students</div>
@@ -215,7 +219,7 @@ const Dashboard = () => {
               {loading ? (
                 <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
-                stats.totalTransactions.toLocaleString()
+                (stats?.totalTransactions || 0).toLocaleString()
               )}
             </div>
             <div className="text-purple-100 text-sm font-medium">Total Transactions</div>

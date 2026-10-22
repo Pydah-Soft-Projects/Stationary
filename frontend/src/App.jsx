@@ -1,6 +1,52 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { Menu, LogOut, ExternalLink, X } from 'lucide-react';
+import { Menu, LogOut, ExternalLink, X, AlertCircle } from 'lucide-react';
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center bg-white rounded-2xl border border-gray-200 shadow-sm m-4">
+          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-4">
+            <AlertCircle size={32} />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Unable to load page content</h2>
+          <p className="text-gray-600 max-w-md mb-4 text-sm">
+            An unexpected error occurred while loading this view. You can reload or return to the main dashboard.
+          </p>
+          <pre className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-xs font-mono max-w-lg overflow-x-auto mb-6 text-left">
+            {this.state.error?.message || String(this.state.error)}
+          </pre>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
+              className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium text-sm shadow-md hover:bg-blue-700 transition"
+            >
+              Reload Page
+            </button>
+            <button
+              onClick={() => { this.setState({ hasError: false, error: null }); window.location.href = '/'; }}
+              className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-200 transition"
+            >
+              Go to Home
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 const Sidebar = lazy(() => import('./Sidebar'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const StudentDetail = lazy(() => import('./pages/StudentDetail'));
@@ -504,14 +550,14 @@ function App() {
     }
   }, [currentUser, isAuthenticated]);
 
-  // If unauthenticated user arrives with ?token= on any route, redirect to /login
+  // If user arrives with ?token= or ?ssoToken= on any route, forward to /login to process SSO
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const token = searchParams.get('token') || searchParams.get('ssoToken');
-    if (token && !isAuthenticated && window.location.pathname !== '/login') {
+    if (token && window.location.pathname !== '/login') {
       navigate(`/login${window.location.search}`, { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [navigate]);
 
   // Loading animation component
   const LoadingScreen = () => (
@@ -567,7 +613,6 @@ function App() {
             flex-1 min-h-screen bg-gray-50 flex justify-center items-start transition-all duration-300
             ${isMobile ? 'ml-0' : (sidebarOpen ? 'ml-52' : 'ml-20')}
             ${isMobile ? 'pt-20 px-4' : 'px-8'}
-            }
           `}>
               {isMobile && (
                 <button
@@ -578,6 +623,7 @@ function App() {
                 </button>
               )}
               <div className="w-full  mx-auto">
+                <ErrorBoundary>
                 <Routes>
                   {/* Dashboard is the default route for authenticated users */}
                   <Route
@@ -739,6 +785,7 @@ function App() {
                   />
                   <Route path="*" element={<Navigate to="/" />} />
                 </Routes>
+                </ErrorBoundary>
               </div>
             </main>
           </>
