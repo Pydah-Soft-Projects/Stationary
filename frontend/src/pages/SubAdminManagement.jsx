@@ -810,8 +810,8 @@ const SubAdminManagement = ({ currentUser }) => {
 
   return (
     <>
-      <div className="min-h-screen bg-gray-50 py-8 px-4">
-        <div className="container mx-auto max-w-6xl">
+      <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+        <div className="w-full">
           <div className="flex justify-between items-center mb-8">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-blue-600 rounded-xl shadow-lg">
@@ -819,7 +819,7 @@ const SubAdminManagement = ({ currentUser }) => {
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">
-                  Usermanagement
+                  User Management
                 </h1>
                 <p className="text-gray-600 mt-1">Search employees and customize their portal features and permissions</p>
               </div>
