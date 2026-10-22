@@ -350,8 +350,11 @@ function App() {
       };
 
       setCurrentUser(userData);
+      localStorage.setItem('isSSO', 'false');
       localStorage.setItem('currentUser', JSON.stringify(userData));
       localStorage.setItem('authToken', token);
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userData));
       setIsAuthenticated(true);
       navigate('/');
       return true;
@@ -361,16 +364,108 @@ function App() {
     }
   };
 
+  const handleSSOLogin = (token, user) => {
+    const userData = {
+      name: user.name || user.username,
+      employeeName: user.employeeName || user.name || null,
+      employee_name: user.employee_name || user.name || null,
+      empNo: user.empNo || user.employeeId || null,
+      emp_no: user.empNo || user.employeeId || null,
+      role: user.role || 'Editor',
+      id: user.id || user._id,
+      permissions: user.permissions || [],
+      assignedCollege: user.assignedCollege || user.assignedBranch || null,
+      assignedBranch: user.assignedCollege || user.assignedBranch || null,
+    };
+
+    setCurrentUser(userData);
+    localStorage.setItem('isSSO', 'true');
+    localStorage.setItem('currentUser', JSON.stringify(userData));
+    localStorage.setItem('authToken', token);
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(userData));
+    setIsAuthenticated(true);
+    navigate('/', { replace: true });
+  };
+
   const handleLogout = () => {
-    // It's good practice to also notify the backend of logout
+    // Notify the backend of logout
     fetch(apiUrl('/api/auth/logout'), { method: 'POST' }).catch(err => console.warn("Logout notification failed", err));
+    localStorage.removeItem('isSSO');
     localStorage.removeItem('currentUser');
     localStorage.removeItem('isAuthenticated');
     localStorage.removeItem('authToken');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    sessionStorage.clear();
     setIsAuthenticated(false);
     setCurrentUser(null);
-    // The component will re-render to the public routes, and the Navigate path="*" will send them to "/" (HomePage)
   };
+
+  // Conditionally load and display Pydah Universal Portal Switcher ONLY for SSO users
+  useEffect(() => {
+    const isSSO = localStorage.getItem('isSSO') === 'true';
+    const activeToken = localStorage.getItem('authToken') || localStorage.getItem('token');
+
+    if (isAuthenticated && isSSO && currentUser && activeToken) {
+      let script = document.getElementById('pydah-portal-switcher-script');
+      if (!script) {
+        script = document.createElement('script');
+        script.id = 'pydah-portal-switcher-script';
+        script.src = 'https://crm.pydah.edu.in/portal-switcher.js';
+        script.async = true;
+        script.setAttribute('data-current-portal', 'stationary-management');
+        script.onload = () => {
+          if (window.PydahSwitcher) {
+            window.PydahSwitcher.init({
+              currentPortal: 'stationary-management',
+              token: activeToken,
+              user: {
+                id: currentUser.id || currentUser._id,
+                username: currentUser.name || currentUser.username,
+                employeeId: currentUser.empNo || currentUser.emp_no,
+                role: currentUser.role
+              },
+              position: 'bottom-right'
+            });
+          }
+        };
+        document.body.appendChild(script);
+      } else if (window.PydahSwitcher) {
+        window.PydahSwitcher.init({
+          currentPortal: 'stationary-management',
+          token: activeToken,
+          user: {
+            id: currentUser.id || currentUser._id,
+            username: currentUser.name || currentUser.username,
+            employeeId: currentUser.empNo || currentUser.emp_no,
+            role: currentUser.role
+          },
+          position: 'bottom-right'
+        });
+      }
+    } else {
+      // Clean up switcher script and any switcher elements when not an SSO session
+      const script = document.getElementById('pydah-portal-switcher-script');
+      if (script) {
+        script.remove();
+      }
+      if (window.PydahSwitcher?.destroy) {
+        try { window.PydahSwitcher.destroy(); } catch (_) {}
+      }
+      // Remove any DOM elements inserted by the portal switcher
+      document.querySelectorAll('#pydah-portal-switcher, .pydah-portal-switcher, [id*="pydah-switcher"], [class*="pydah-switcher"]').forEach(el => el.remove());
+    }
+  }, [currentUser, isAuthenticated]);
+
+  // If unauthenticated user arrives with ?token= on any route, redirect to /login
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const token = searchParams.get('token') || searchParams.get('ssoToken');
+    if (token && !isAuthenticated && window.location.pathname !== '/login') {
+      navigate(`/login${window.location.search}`, { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   // Loading animation component
   const LoadingScreen = () => (
@@ -604,7 +699,7 @@ function App() {
         ) : (
           <Routes>
             <Route path="/" element={<HomePage />} />
-            <Route path="/login" element={<Login onLogin={handleLogin} />} />
+            <Route path="/login" element={<Login onLogin={handleLogin} onSSOLogin={handleSSOLogin} />} />
             {/* Unauthenticated users attempting to access any other path are redirected to HomePage ('/') */}
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>

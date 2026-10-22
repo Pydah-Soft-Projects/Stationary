@@ -106,6 +106,7 @@ const normalizePermissions = (perms = []) => {
 // A simple modal component for creating/editing sub-admins
 const SubAdminModal = ({ isOpen, onClose, onSave, subAdmin }) => {
   const [name, setName] = useState(subAdmin?.name || '');
+  const [empNo, setEmpNo] = useState(subAdmin?.empNo || '');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState(subAdmin?.role || 'Editor');
   const [permissions, setPermissions] = useState({}); // Object format: { 'key': 'view' | 'full' }
@@ -186,6 +187,7 @@ const SubAdminModal = ({ isOpen, onClose, onSave, subAdmin }) => {
   useEffect(() => {
     if (isOpen) {
       setName(subAdmin?.name || '');
+      setEmpNo(subAdmin?.empNo || '');
       setRole(subAdmin?.role || 'Editor');
       setPassword(''); // Always clear password field when modal opens
       setEmployeeInfo(subAdmin?.employeeDetails || null);
@@ -291,6 +293,7 @@ const SubAdminModal = ({ isOpen, onClose, onSave, subAdmin }) => {
     onSave({
       ...subAdmin,
       name,
+      empNo: empNo ? empNo.trim() : (employeeInfo?.empNo || undefined),
       role: submissionRole,
       permissions: cleanedPermissions,
       assignedCollege: assignedCollege || null,
@@ -356,7 +359,8 @@ const SubAdminModal = ({ isOpen, onClose, onSave, subAdmin }) => {
                     <div
                       key={emp.id}
                       onClick={() => {
-                        setName(emp.empNo || emp.name);
+                        setName(emp.name || emp.empNo);
+                        setEmpNo(emp.empNo || '');
                         setEmployeeInfo(emp);
                         setIsHrmsEmployee(true);
                         setModalSearchResults([]);
@@ -377,17 +381,35 @@ const SubAdminModal = ({ isOpen, onClose, onSave, subAdmin }) => {
             </div>
           )}
 
-          <div className="mb-5">
-            <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">Name / Emp ID</label>
-            <input
-              id="name"
-              type="text"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter name or Emp ID"
-              required
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+            <div>
+              <label htmlFor="empNo" className="block text-sm font-semibold text-gray-700 mb-2">
+                Employee ID / Emp No {employeeInfo && <span className="text-xs font-normal text-blue-600 font-mono">({employeeInfo.empNo})</span>}
+              </label>
+              <input
+                id="empNo"
+                type="text"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
+                value={empNo}
+                onChange={(e) => setEmpNo(e.target.value)}
+                placeholder="e.g. 1042 or EMP001 (used to log in)"
+              />
+              <p className="text-xs text-gray-500 mt-1">Stored ID used for login authentication.</p>
+            </div>
+
+            <div>
+              <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-2">Name / Username</label>
+              <input
+                id="name"
+                type="text"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter name or username"
+                required
+              />
+              <p className="text-xs text-gray-500 mt-1">Display name / portal username.</p>
+            </div>
           </div>
           <div className="mb-6">
             <label htmlFor="password" className="block text-sm font-semibold text-gray-700 mb-2">

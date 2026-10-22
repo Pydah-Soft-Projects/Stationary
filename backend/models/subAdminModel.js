@@ -6,8 +6,14 @@ const subAdminSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
-      unique: true, // used as login ID
+      unique: true, // used as login ID / username
       trim: true,
+    },
+    empNo: {
+      type: String,
+      trim: true,
+      sparse: true,
+      index: true,
     },
     password: {
       type: String,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Shield, LogIn, User, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { apiUrl } from '../utils/api';
 
@@ -8,12 +8,14 @@ const defaultBranding = {
   subheader: 'Efficiently managing academic supplies, inventory, and student allocations in one unified platform.',
 };
 
-const Login = ({ onLogin }) => {
+const Login = ({ onLogin, onSSOLogin }) => {
+  const location = useLocation();
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isVerifyingSSO, setIsVerifyingSSO] = useState(false);
   const [branding, setBranding] = useState(defaultBranding);
 
   useEffect(() => {
@@ -44,6 +46,66 @@ const Login = ({ onLogin }) => {
     };
   }, []);
 
+  // Intercept and handle incoming SSO token from CRM / Portal Switcher
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const ssoToken = urlParams.get('token') || urlParams.get('ssoToken');
+
+    if (ssoToken) {
+      handleSSOLogin(ssoToken);
+    }
+  }, [location.search]);
+
+  const handleSSOLogin = async (ssoToken) => {
+    setIsVerifyingSSO(true);
+    setError('');
+
+    try {
+      // 1. Clear stale session data
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      sessionStorage.clear();
+
+      // 2. Verify with Stationary backend SSO endpoint
+      const res = await fetch(apiUrl('/api/auth/sso-login'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: ssoToken })
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok && data?.success) {
+        localStorage.setItem('isSSO', 'true');
+
+        // 3. Smooth dismiss for workspace switcher overlay
+        if (window.PydahSwitcher?.hideTransition) {
+          window.PydahSwitcher.hideTransition();
+        }
+
+        // 4. Update session
+        if (typeof onSSOLogin === 'function') {
+          onSSOLogin(data.token, data.user);
+        } else {
+          localStorage.setItem('authToken', data.token);
+          localStorage.setItem('currentUser', JSON.stringify(data.user));
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('user', JSON.stringify(data.user));
+          window.location.href = '/';
+        }
+      } else {
+        setError(data?.message || 'Single Sign-On failed. Please enter your credentials.');
+        setIsVerifyingSSO(false);
+      }
+    } catch (err) {
+      console.error('SSO Login Failed:', err);
+      setError('Single Sign-On connection failed. Please enter your credentials.');
+      setIsVerifyingSSO(false);
+    }
+  };
+
   const backgroundClass = 'bg-slate-950';
   const cardClass = 'bg-white/5 backdrop-blur-md border border-white/10 shadow-2xl shadow-black/40';
   const headingClass = 'text-white';
@@ -59,6 +121,7 @@ const Login = ({ onLogin }) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
+    localStorage.removeItem('isSSO');
     
     try {
       const success = await onLogin(id, password);
@@ -71,6 +134,37 @@ const Login = ({ onLogin }) => {
       setIsLoading(false);
     }
   };
+
+  // Zero-flicker loading screen when authenticating via SSO
+  if (isVerifyingSSO) {
+    return (
+      <div className="relative min-h-screen w-full flex flex-col items-center justify-center bg-slate-950 text-white overflow-hidden font-sans">
+        <div 
+          className="absolute inset-0 z-0 opacity-40"
+          style={{
+            backgroundImage: `url('/Stationary-landing-background.jpg')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+          }}
+        />
+        <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm z-10" />
+
+        <div className="relative z-20 flex flex-col items-center p-8 bg-white/10 backdrop-blur-xl border border-white/20 rounded-3xl shadow-2xl max-w-sm text-center">
+          <div className="w-16 h-16 bg-blue-600/30 rounded-2xl flex items-center justify-center mb-5 border border-blue-400/40 shadow-lg shadow-blue-900/50">
+            <Shield className="w-8 h-8 text-blue-400 animate-pulse" />
+          </div>
+          <h3 className="text-xl font-bold tracking-tight mb-2 text-white">Authenticating Session...</h3>
+          <p className="text-sm text-slate-300 mb-6">
+            Connecting through Pydah Central SSO Gateway to verify your credentials.
+          </p>
+          <div className="flex items-center gap-3 text-xs text-blue-300 font-medium bg-blue-950/60 px-4 py-2 rounded-full border border-blue-500/30">
+            <div className="w-4 h-4 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
+            <span>Stationary Management</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center justify-center overflow-hidden">
@@ -113,10 +207,10 @@ const Login = ({ onLogin }) => {
 
             {/* Login Form */}
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* User ID Field */}
+              {/* User ID / Emp ID Field */}
               <div className="space-y-2">
                 <label htmlFor="id" className={`block text-sm font-medium ${labelClass}`}>
-                  User ID
+                  Emp ID / User ID
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -128,7 +222,7 @@ const Login = ({ onLogin }) => {
                     className={`block w-full pl-10 pr-3 py-3 rounded-xl focus:outline-none focus:ring-2 focus:border-transparent transition-all duration-200 ${inputClass}`}
                     value={id}
                     onChange={(e) => setId(e.target.value)}
-                    placeholder="Enter your user ID"
+                    placeholder="Enter your Emp ID or User ID"
                     required
                   />
                 </div>

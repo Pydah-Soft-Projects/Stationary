@@ -20,21 +20,21 @@ const listSubAdmins = asyncHandler(async (req, res) => {
   const results = await Promise.all(subadmins.map(async (sa) => {
     const college = sa.assignedCollege || sa.assignedBranch;
     let employeeName = null;
-    let empNo = null;
+    let empNo = sa.empNo || null;
 
     if (conn) {
       try {
-        const trimmed = String(sa.name || '').trim();
-        const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const searchKey = String(sa.empNo || sa.name || '').trim();
+        const escaped = searchKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const emp = await conn.collection('employees').findOne({
           $or: [
-            { emp_no: trimmed },
+            { emp_no: searchKey },
             { employee_name: { $regex: `^${escaped}$`, $options: 'i' } }
           ]
         }, { projection: { employee_name: 1, emp_no: 1 } });
         if (emp) {
           employeeName = emp.employee_name;
-          empNo = emp.emp_no;
+          if (!empNo) empNo = emp.emp_no;
         }
       } catch (err) {}
     }
@@ -42,8 +42,8 @@ const listSubAdmins = asyncHandler(async (req, res) => {
     return { 
       _id: sa._id, 
       name: sa.name, 
+      empNo: empNo || sa.empNo || null,
       employeeName,
-      empNo,
       role: sa.role, 
       permissions: sa.permissions || [], 
       assignedCollege: college,
@@ -56,39 +56,48 @@ const listSubAdmins = asyncHandler(async (req, res) => {
 
 // POST /api/subadmins
 const createSubAdmin = asyncHandler(async (req, res) => {
-  const { name, password, role, permissions, assignedCollege, assignedBranch } = req.body;
+  const { name, empNo, password, role, permissions, assignedCollege, assignedBranch } = req.body;
   
   // Accept either assignedCollege or assignedBranch (legacy)
   const targetCollege = assignedCollege || assignedBranch;
 
-  if (!name) {
+  if (!name && !empNo) {
     res.status(400);
     throw new Error('Name or Employee ID is required');
   }
 
+  const effectiveName = (name || empNo).trim();
+  let effectiveEmpNo = empNo ? String(empNo).trim() : null;
+
+  let conn = getEmployeeConnection();
+  if (!conn) {
+    try {
+      conn = await connectEmployeeDB();
+    } catch (e) {}
+  }
+
   let finalPassword = password;
-  if (!finalPassword) {
-    let conn = getEmployeeConnection();
-    if (!conn) {
-      try {
-        conn = await connectEmployeeDB();
-      } catch (e) {}
-    }
-    if (conn) {
-      const trimmed = String(name).trim();
-      const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (conn) {
+    try {
+      const searchKey = effectiveEmpNo || effectiveName;
+      const escaped = searchKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const emp = await conn.collection('employees').findOne({
         $or: [
-          { emp_no: trimmed },
-          { email: trimmed.toLowerCase() },
-          { phone_number: trimmed },
+          { emp_no: searchKey },
+          { email: searchKey.toLowerCase() },
+          { phone_number: searchKey },
           { employee_name: { $regex: `^${escaped}$`, $options: 'i' } }
         ]
       });
       if (emp) {
-        finalPassword = emp.plain_password || emp.password;
+        if (!effectiveEmpNo && emp.emp_no) {
+          effectiveEmpNo = String(emp.emp_no).trim();
+        }
+        if (!finalPassword) {
+          finalPassword = emp.plain_password || emp.password;
+        }
       }
-    }
+    } catch (err) {}
   }
 
   if (!finalPassword) {
@@ -96,13 +105,20 @@ const createSubAdmin = asyncHandler(async (req, res) => {
     throw new Error('Password is required');
   }
 
-  const exists = await SubAdmin.findOne({ name });
+  const queryOr = [{ name: effectiveName }];
+  if (effectiveEmpNo) {
+    queryOr.push({ empNo: effectiveEmpNo });
+    queryOr.push({ name: effectiveEmpNo });
+  }
+  const exists = await SubAdmin.findOne({ $or: queryOr });
   if (exists) {
     res.status(400);
-    throw new Error('User with this name/ID already exists');
+    throw new Error('User with this name/ID or Employee Number already exists');
   }
+
   const created = await SubAdmin.create({ 
-    name, 
+    name: effectiveName, 
+    empNo: effectiveEmpNo || null,
     password: finalPassword, 
     role: role || 'Editor', 
     permissions: permissions || [], 
@@ -111,7 +127,7 @@ const createSubAdmin = asyncHandler(async (req, res) => {
   await created.populate('assignedCollege', 'name');
 
   let employeeName = null;
-  let empNo = null;
+  let resolvedEmpNo = created.empNo || null;
   let empConn = getEmployeeConnection();
   if (!empConn) {
     try {
@@ -120,17 +136,17 @@ const createSubAdmin = asyncHandler(async (req, res) => {
   }
   if (empConn) {
     try {
-      const trimmed = String(created.name || '').trim();
-      const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchKey = String(created.empNo || created.name || '').trim();
+      const escaped = searchKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const emp = await empConn.collection('employees').findOne({
         $or: [
-          { emp_no: trimmed },
+          { emp_no: searchKey },
           { employee_name: { $regex: `^${escaped}$`, $options: 'i' } }
         ]
       }, { projection: { employee_name: 1, emp_no: 1 } });
       if (emp) {
         employeeName = emp.employee_name;
-        empNo = emp.emp_no;
+        if (!resolvedEmpNo) resolvedEmpNo = emp.emp_no;
       }
     } catch (err) {}
   }
@@ -138,8 +154,8 @@ const createSubAdmin = asyncHandler(async (req, res) => {
   res.status(201).json({ 
     _id: created._id, 
     name: created.name, 
+    empNo: resolvedEmpNo,
     employeeName,
-    empNo,
     role: created.role, 
     permissions: created.permissions, 
     assignedCollege: created.assignedCollege,
@@ -150,13 +166,14 @@ const createSubAdmin = asyncHandler(async (req, res) => {
 // PUT /api/subadmins/:id
 const updateSubAdmin = asyncHandler(async (req, res) => {
   const { id } = req.params;
-  const { name, password, role, permissions, assignedCollege, assignedBranch } = req.body;
+  const { name, empNo, password, role, permissions, assignedCollege, assignedBranch } = req.body;
   const sub = await SubAdmin.findById(id).select('+password');
   if (!sub) {
     res.status(404);
     throw new Error('User not found');
   }
   if (name) sub.name = name;
+  if (empNo !== undefined) sub.empNo = empNo ? String(empNo).trim() : null;
   if (role) sub.role = role;
   if (password) sub.password = password; // will be hashed by pre-save
   if (permissions !== undefined) sub.permissions = permissions;
@@ -169,7 +186,7 @@ const updateSubAdmin = asyncHandler(async (req, res) => {
   await saved.populate('assignedCollege', 'name');
 
   let employeeName = null;
-  let empNo = null;
+  let resolvedEmpNo = saved.empNo || null;
   let empConn = getEmployeeConnection();
   if (!empConn) {
     try {
@@ -178,17 +195,17 @@ const updateSubAdmin = asyncHandler(async (req, res) => {
   }
   if (empConn) {
     try {
-      const trimmed = String(saved.name || '').trim();
-      const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchKey = String(saved.empNo || saved.name || '').trim();
+      const escaped = searchKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const emp = await empConn.collection('employees').findOne({
         $or: [
-          { emp_no: trimmed },
+          { emp_no: searchKey },
           { employee_name: { $regex: `^${escaped}$`, $options: 'i' } }
         ]
       }, { projection: { employee_name: 1, emp_no: 1 } });
       if (emp) {
         employeeName = emp.employee_name;
-        empNo = emp.emp_no;
+        if (!resolvedEmpNo) resolvedEmpNo = emp.emp_no;
       }
     } catch (err) {}
   }
@@ -196,8 +213,8 @@ const updateSubAdmin = asyncHandler(async (req, res) => {
   res.json({ 
     _id: saved._id, 
     name: saved.name, 
+    empNo: resolvedEmpNo,
     employeeName,
-    empNo,
     role: saved.role, 
     permissions: saved.permissions, 
     assignedCollege: saved.assignedCollege,
@@ -228,33 +245,37 @@ const loginSubAdmin = asyncHandler(async (req, res) => {
   const trimmedName = String(name).trim();
   const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-  // 1. Check local SubAdmin record first
+  // 1. Check local SubAdmin record first (by empNo OR username/name)
   const sub = await SubAdmin.findOne({ 
-    name: { $regex: `^${escapedName}$`, $options: 'i' } 
+    $or: [
+      { empNo: trimmedName },
+      { empNo: { $regex: `^${escapedName}$`, $options: 'i' } },
+      { name: { $regex: `^${escapedName}$`, $options: 'i' } }
+    ]
   }).select('+password').populate('assignedCollege', 'name');
 
   if (sub) {
     const ok = await sub.comparePassword(password);
     if (ok) {
       let employeeName = null;
-      let empNo = null;
+      let empNo = sub.empNo || null;
       let conn = getEmployeeConnection();
       if (!conn) {
         try { conn = await connectEmployeeDB(); } catch (e) {}
       }
       if (conn) {
         try {
-          const trimmed = String(sub.name || '').trim();
-          const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const searchKey = String(sub.empNo || sub.name || '').trim();
+          const escaped = searchKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           const emp = await conn.collection('employees').findOne({
             $or: [
-              { emp_no: trimmed },
+              { emp_no: searchKey },
               { employee_name: { $regex: `^${escaped}$`, $options: 'i' } }
             ]
           }, { projection: { employee_name: 1, emp_no: 1 } });
           if (emp) {
             employeeName = emp.employee_name;
-            empNo = emp.emp_no;
+            if (!empNo) empNo = emp.emp_no;
           }
         } catch (err) {}
       }
@@ -262,10 +283,10 @@ const loginSubAdmin = asyncHandler(async (req, res) => {
       return res.json({ 
         _id: sub._id, 
         name: sub.name, 
+        empNo: empNo || sub.empNo || null,
+        emp_no: empNo || sub.empNo || null,
         employeeName,
         employee_name: employeeName,
-        empNo,
-        emp_no: empNo,
         role: sub.role, 
         permissions: sub.permissions || [], 
         assignedCollege: sub.assignedCollege,
@@ -286,13 +307,18 @@ const loginSubAdmin = asyncHandler(async (req, res) => {
 
   if (conn) {
     try {
+      const hrmsConditions = [
+        { emp_no: trimmedName },
+        { email: trimmedName.toLowerCase() },
+        { phone_number: trimmedName },
+        { employee_name: { $regex: `^${escapedName}$`, $options: 'i' } }
+      ];
+      if (sub && sub.empNo) {
+        hrmsConditions.push({ emp_no: sub.empNo });
+      }
+
       const emp = await conn.collection('employees').findOne({
-        $or: [
-          { emp_no: trimmedName },
-          { email: trimmedName.toLowerCase() },
-          { phone_number: trimmedName },
-          { employee_name: { $regex: `^${escapedName}$`, $options: 'i' } }
-        ]
+        $or: hrmsConditions
       });
 
       if (emp) {
@@ -316,26 +342,49 @@ const loginSubAdmin = asyncHandler(async (req, res) => {
         if (isMatch) {
           // If the employee is configured in the stationary database, load their configured role and permissions
           const searchConditions = [];
-          if (emp.emp_no) searchConditions.push({ name: String(emp.emp_no).trim() });
+          if (emp.emp_no) {
+            searchConditions.push({ empNo: String(emp.emp_no).trim() });
+            searchConditions.push({ name: String(emp.emp_no).trim() });
+          }
           if (emp.employee_name) {
             searchConditions.push({ 
               name: { $regex: `^${emp.employee_name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } 
             });
           }
+          searchConditions.push({ empNo: trimmedName });
           searchConditions.push({ name: { $regex: `^${escapedName}$`, $options: 'i' } });
 
           const existingSub = await SubAdmin.findOne({ $or: searchConditions })
-            .select('-password')
+            .select('+password')
             .populate('assignedCollege', 'name');
+
+          // Keep local SubAdmin synced with HRMS credentials and empNo
+          if (existingSub) {
+            try {
+              let shouldSave = false;
+              if (!existingSub.empNo && emp.emp_no) {
+                existingSub.empNo = String(emp.emp_no).trim();
+                shouldSave = true;
+              }
+              const isLocalMatch = await existingSub.comparePassword(candidatePassword).catch(() => false);
+              if (!isLocalMatch) {
+                existingSub.password = candidatePassword;
+                shouldSave = true;
+              }
+              if (shouldSave) {
+                await existingSub.save();
+              }
+            } catch (syncErr) {}
+          }
 
           // Return user profile dynamically from DB records without exposing password
           return res.json({
             _id: existingSub ? existingSub._id : emp._id,
             name: existingSub ? existingSub.name : (emp.employee_name || emp.emp_no || trimmedName),
+            empNo: (existingSub && existingSub.empNo) || emp.emp_no || null,
+            emp_no: (existingSub && existingSub.empNo) || emp.emp_no || null,
             employeeName: emp.employee_name || null,
             employee_name: emp.employee_name || null,
-            empNo: emp.emp_no || null,
-            emp_no: emp.emp_no || null,
             role: existingSub ? existingSub.role : 'Editor',
             permissions: existingSub ? (existingSub.permissions || []) : [],
             assignedCollege: existingSub ? existingSub.assignedCollege : null,
