@@ -23,7 +23,7 @@ const subAdminSchema = new mongoose.Schema(
     role: {
       type: String,
       default: 'Editor',
-      enum: ['Administrator', 'Editor', 'Viewer', 'Accountant'],
+      trim: true,
     },
     permissions: {
       type: [String],

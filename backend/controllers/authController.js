@@ -162,25 +162,21 @@ const ssoLogin = async (req, res) => {
         name: assignedName,
         empNo: ssoUser.empNo ? String(ssoUser.empNo).trim() : null,
         password: `sso_${Date.now()}_${Math.random().toString(36).substring(7)}`, // Hashed by subAdminSchema pre-save hook
-        role: ssoUser.role || 'Editor',
-        permissions: Array.isArray(ssoUser.permissions) ? ssoUser.permissions : [],
+        role: 'Editor', // Use Stationary's role; do NOT use CRM's external role (e.g. faculty/student)
+        permissions: [], // Managed within Stationary SubAdmin Management
         assignedCollege: ssoUser.assignedCollege || null,
         assignedBranch: ssoUser.assignedBranch || null
       });
       await subAdmin.save();
     } else {
-      // Sync permissions, empNo & assigned college if updated from CRM
+      // Preserve existing Stationary role & permissions. Do NOT overwrite with CRM role or permissions.
       let modified = false;
       if (!subAdmin.empNo && ssoUser.empNo) {
         subAdmin.empNo = String(ssoUser.empNo).trim();
         modified = true;
       }
-      if (ssoUser.role && subAdmin.role !== ssoUser.role) {
-        subAdmin.role = ssoUser.role;
-        modified = true;
-      }
-      if (Array.isArray(ssoUser.permissions) && ssoUser.permissions.length > 0) {
-        subAdmin.permissions = ssoUser.permissions;
+      if (!subAdmin.role) {
+        subAdmin.role = 'Editor';
         modified = true;
       }
       if (ssoUser.assignedCollege && !subAdmin.assignedCollege) {
