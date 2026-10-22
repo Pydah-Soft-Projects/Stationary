@@ -125,7 +125,7 @@ const Dashboard = () => {
 
   const safeProducts = Array.isArray(products) ? products : [];
   const safeColleges = Array.isArray(colleges) ? colleges : [];
-  const safeZeroStockDuesData = Array.isArray(zeroStockDuesData) ? zeroStockDuesData : [];
+  const safeZeroStockDues = Array.isArray(zeroStockDuesData) ? zeroStockDuesData : [];
 
   // Calculate low stock products
   const lowStockProducts = safeProducts.filter(product => {
@@ -578,7 +578,7 @@ const Dashboard = () => {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">Zero-Stock Pending Dues</h2>
-                  <p className="text-sm text-gray-500">{zeroStockDuesData.length} students waiting for items</p>
+                  <p className="text-sm text-gray-500">{safeZeroStockDues.length} students waiting for items</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -607,7 +607,7 @@ const Dashboard = () => {
                 <div className="text-center py-12">
                   <PackageSearch className="w-16 h-16 text-gray-300 mx-auto mb-4" />
                   <p className="text-gray-500 font-medium">
-                    {zeroStockDuesData.length === 0 ? "No pending dues due to zero stock!" : "No matching results found!"}
+                    {safeZeroStockDues.length === 0 ? "No pending dues due to zero stock!" : "No matching results found!"}
                   </p>
                 </div>
               ) : (
