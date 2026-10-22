@@ -85,23 +85,38 @@ const ssoLogin = async (req, res) => {
     }
 
     // 1. Verify encrypted SSO token with CRM Central Gateway
-    const verifyUrl = `${CRM_AUTH_URL}/api/auth/verify-token`;
+    const verifyPayload = { encryptedToken: token, token };
+    let verifyUrl = `${CRM_AUTH_URL}/api/auth/verify-token`;
     let crmResponse;
     try {
-      crmResponse = await makePostRequest(verifyUrl, { encryptedToken: token });
+      crmResponse = await makePostRequest(verifyUrl, verifyPayload);
+      // If /api/auth/verify-token returned 404, fallback to /auth/verify-token
+      if (crmResponse.status === 404) {
+        verifyUrl = `${CRM_AUTH_URL}/auth/verify-token`;
+        crmResponse = await makePostRequest(verifyUrl, verifyPayload);
+      }
     } catch (netErr) {
       console.error('[SSO Network Error]:', netErr.message);
       return res.status(502).json({
         success: false,
-        message: `Failed to connect to CRM Auth Gateway at ${CRM_AUTH_URL}`
+        message: `Failed to connect to CRM Auth Gateway at ${CRM_AUTH_URL}: ${netErr.message}`
       });
     }
+
+    console.log('[SSO Verify Result]:', {
+      verifyUrl,
+      status: crmResponse?.status,
+      ok: crmResponse?.ok,
+      data: crmResponse?.data
+    });
 
     if (!crmResponse.ok || !crmResponse.data || !crmResponse.data.valid) {
       const msg = crmResponse.data?.message || 'Invalid or expired SSO token';
       return res.status(401).json({
         success: false,
-        message: msg
+        message: msg,
+        crmStatus: crmResponse?.status,
+        crmResponse: crmResponse?.data
       });
     }
 
