@@ -9,7 +9,11 @@ const makePostRequest = async (url, data) => {
   if (typeof fetch === 'function') {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'Stationary-Backend/1.0'
+      },
       body: JSON.stringify(data)
     });
     const json = await res.json().catch(() => null);
@@ -24,6 +28,8 @@ const makePostRequest = async (url, data) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'Stationary-Backend/1.0',
         'Content-Length': Buffer.byteLength(payload)
       }
     }, (res) => {
@@ -86,14 +92,19 @@ const ssoLogin = async (req, res) => {
 
     // 1. Verify encrypted SSO token with CRM Central Gateway
     const verifyPayload = { encryptedToken: token, token };
-    let verifyUrl = `${CRM_AUTH_URL}/api/auth/verify-token`;
+    // In CRM, auth routes are mounted under /auth/ (e.g., /auth/verify-token, /auth/switch-portal)
+    let verifyUrl = `${CRM_AUTH_URL}/auth/verify-token`;
     let crmResponse;
     try {
       crmResponse = await makePostRequest(verifyUrl, verifyPayload);
-      // If /api/auth/verify-token returned 404, fallback to /auth/verify-token
-      if (crmResponse.status === 404) {
-        verifyUrl = `${CRM_AUTH_URL}/auth/verify-token`;
-        crmResponse = await makePostRequest(verifyUrl, verifyPayload);
+      // If /auth/verify-token returned 404 or 405, fallback to /api/auth/verify-token
+      if (!crmResponse.ok && (crmResponse.status === 404 || crmResponse.status === 405)) {
+        const altUrl = `${CRM_AUTH_URL}/api/auth/verify-token`;
+        const altResponse = await makePostRequest(altUrl, verifyPayload);
+        if (altResponse.ok || (altResponse.status !== 404 && altResponse.status !== 405)) {
+          verifyUrl = altUrl;
+          crmResponse = altResponse;
+        }
       }
     } catch (netErr) {
       console.error('[SSO Network Error]:', netErr.message);
