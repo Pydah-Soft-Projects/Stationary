@@ -52,13 +52,25 @@ const Login = ({ onLogin, onSSOLogin }) => {
     const ssoToken = urlParams.get('token') || urlParams.get('ssoToken');
 
     if (ssoToken) {
+      console.log('[SSO Frontend] 🔑 Detected token parameter in URL:', ssoToken.substring(0, 20) + '...');
       handleSSOLogin(ssoToken);
     }
   }, [location.search]);
 
   const handleSSOLogin = async (ssoToken) => {
+    console.log('[SSO Frontend] Starting SSO verification process...');
     setIsVerifyingSSO(true);
     setError('');
+
+    // Failsafe timer (12s): Ensure the UI never hangs indefinitely on the loading screen
+    const failsafeTimer = setTimeout(() => {
+      console.warn('[SSO Frontend] ⏱️ 12-second failsafe triggered: dismissing loading screen');
+      if (window.PydahSwitcher?.hideTransition) {
+        window.PydahSwitcher.hideTransition();
+      }
+      setIsVerifyingSSO(false);
+      setError('Single Sign-On connection timed out. Please enter your credentials or try again.');
+    }, 12000);
 
     try {
       // 1. Clear stale session data
@@ -68,27 +80,31 @@ const Login = ({ onLogin, onSSOLogin }) => {
       localStorage.removeItem('user');
       sessionStorage.clear();
 
-      // 2. Verify with Stationary backend SSO endpoint
+      console.log('[SSO Frontend] 📡 Calling POST /api/auth/sso-login...');
       const res = await fetch(apiUrl('/api/auth/sso-login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: ssoToken })
       });
 
+      clearTimeout(failsafeTimer);
+      console.log('[SSO Frontend] 📥 Response status from Stationary backend:', res.status);
       const data = await res.json().catch(() => null);
+      console.log('[SSO Frontend] 📦 Response body:', data);
 
       if (res.ok && data?.success) {
+        console.log('[SSO Frontend] 🎉 SSO authentication SUCCESS! User:', data.user);
         localStorage.setItem('isSSO', 'true');
 
-        // 3. Smooth dismiss for workspace switcher overlay
         if (window.PydahSwitcher?.hideTransition) {
           window.PydahSwitcher.hideTransition();
         }
 
-        // 4. Update session
         if (typeof onSSOLogin === 'function') {
+          console.log('[SSO Frontend] Invoking onSSOLogin in App.jsx');
           onSSOLogin(data.token, data.user);
         } else {
+          console.log('[SSO Frontend] Saving session and navigating to /');
           localStorage.setItem('authToken', data.token);
           localStorage.setItem('currentUser', JSON.stringify(data.user));
           localStorage.setItem('token', data.token);
@@ -96,18 +112,21 @@ const Login = ({ onLogin, onSSOLogin }) => {
           window.location.href = '/';
         }
       } else {
+        const sourceTag = data?.origin || (res.status === 401 ? 'CRM_SIDE' : 'STATIONARY_SIDE');
+        console.error(`[SSO Frontend] ❌ Verification failed [${sourceTag}]:`, data?.message);
         if (window.PydahSwitcher?.hideTransition) {
           window.PydahSwitcher.hideTransition();
         }
-        setError(data?.message || 'Single Sign-On failed. Please enter your credentials.');
+        setError(`[${sourceTag}] ${data?.message || 'Single Sign-On failed. Please enter your credentials.'}`);
         setIsVerifyingSSO(false);
       }
     } catch (err) {
-      console.error('SSO Login Failed:', err);
+      clearTimeout(failsafeTimer);
+      console.error('[SSO Frontend] ❌ Network/Fetch error during SSO verification:', err);
       if (window.PydahSwitcher?.hideTransition) {
         window.PydahSwitcher.hideTransition();
       }
-      setError('Single Sign-On connection failed. Please enter your credentials.');
+      setError(`Single Sign-On connection error: ${err.message}`);
       setIsVerifyingSSO(false);
     }
   };
@@ -163,10 +182,18 @@ const Login = ({ onLogin, onSSOLogin }) => {
           <p className="text-sm text-slate-300 mb-6">
             Connecting through Pydah Central SSO Gateway to verify your credentials.
           </p>
-          <div className="flex items-center gap-3 text-xs text-blue-300 font-medium bg-blue-950/60 px-4 py-2 rounded-full border border-blue-500/30">
+          <div className="flex items-center gap-3 text-xs text-blue-300 font-medium bg-blue-950/60 px-4 py-2 rounded-full border border-blue-500/30 mb-5">
             <div className="w-4 h-4 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />
-            <span>Stationary Management</span>
+            <span>Verifying Credentials</span>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setIsVerifyingSSO(false)}
+            className="text-xs text-slate-400 hover:text-white underline transition-colors cursor-pointer"
+          >
+            Cancel and login with password
+          </button>
         </div>
       </div>
     );

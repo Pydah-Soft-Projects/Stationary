@@ -411,17 +411,18 @@ function App() {
   };
 
   const handleSSOLogin = (token, user) => {
+    console.log('[App] handleSSOLogin invoked with user:', user);
     const userData = {
-      name: user.name || user.username,
-      employeeName: user.employeeName || user.name || null,
-      employee_name: user.employee_name || user.name || null,
-      empNo: user.empNo || user.employeeId || null,
-      emp_no: user.empNo || user.employeeId || null,
-      role: user.role || 'Editor',
-      id: user.id || user._id,
-      permissions: user.permissions || [],
-      assignedCollege: user.assignedCollege || user.assignedBranch || null,
-      assignedBranch: user.assignedCollege || user.assignedBranch || null,
+      name: user?.name || user?.username,
+      employeeName: user?.employeeName || user?.name || null,
+      employee_name: user?.employee_name || user?.name || null,
+      empNo: user?.empNo || user?.employeeId || null,
+      emp_no: user?.empNo || user?.employeeId || null,
+      role: user?.role || 'Editor',
+      id: user?.id || user?._id,
+      permissions: user?.permissions || [],
+      assignedCollege: user?.assignedCollege || user?.assignedBranch || null,
+      assignedBranch: user?.assignedCollege || user?.assignedBranch || null,
     };
 
     setCurrentUser(userData);
@@ -431,6 +432,7 @@ function App() {
     localStorage.setItem('token', token);
     localStorage.setItem('user', JSON.stringify(userData));
     setIsAuthenticated(true);
+    console.log('[App] ✅ SSO session stored in localStorage. Redirecting to /');
     navigate('/', { replace: true });
   };
 
