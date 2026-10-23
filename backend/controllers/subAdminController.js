@@ -371,6 +371,10 @@ const loginSubAdmin = asyncHandler(async (req, res) => {
                 existingSub.password = candidatePassword;
                 shouldSave = true;
               }
+              if (!existingSub.role || existingSub.role === 'faculty' || existingSub.role.toLowerCase() === 'faculty') {
+                existingSub.role = 'Editor';
+                shouldSave = true;
+              }
               if (shouldSave) {
                 await existingSub.save();
               }

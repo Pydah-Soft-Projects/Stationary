@@ -166,7 +166,7 @@ const ssoLogin = async (req, res) => {
         subAdmin.empNo = String(ssoUser.empNo).trim();
         modified = true;
       }
-      if (!subAdmin.role) {
+      if (!subAdmin.role || subAdmin.role === 'faculty' || subAdmin.role.toLowerCase() === 'faculty') {
         subAdmin.role = 'Editor';
         modified = true;
       }
