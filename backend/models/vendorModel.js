@@ -87,7 +87,7 @@ const vendorSchema = new mongoose.Schema(
 );
 
 // Index for faster search
-vendorSchema.index({ name: 1 });
+// vendorSchema.index({ name: 1 }); // Removed duplicate index as name has unique: true
 
 const Vendor = mongoose.model('Vendor', vendorSchema);
 

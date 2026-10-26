@@ -17,6 +17,7 @@ const generalPurchaseRoutes = require("./routes/generalPurchaseRoutes");
 const generalDistributionRoutes = require("./routes/generalDistributionRoutes");
 const employeeRoutes = require("./routes/employeeRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const authRoutes = require("./routes/authRoutes");
 const { connectEmployeeDB } = require("./config/employeeDb");
 
 dotenv.config();
@@ -141,6 +142,10 @@ app.get("/", (req, res) => {
 
 // Mount product routes
 app.use("/api/products", productRoutes);
+
+// Mount auth routes (SSO & session)
+app.use("/api/auth", authRoutes);
+app.use("/api", authRoutes);
 
 // Mount sub-admin routes
 app.use("/api", subAdminRoutes);

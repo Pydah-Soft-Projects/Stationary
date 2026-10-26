@@ -1,6 +1,52 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { Menu } from 'lucide-react';
+import { Menu, LogOut, ExternalLink, X, AlertCircle } from 'lucide-react';
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] p-8 text-center bg-white rounded-2xl border border-gray-200 shadow-sm m-4">
+          <div className="w-16 h-16 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center mb-4">
+            <AlertCircle size={32} />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Unable to load page content</h2>
+          <p className="text-gray-600 max-w-md mb-4 text-sm">
+            An unexpected error occurred while loading this view. You can reload or return to the main dashboard.
+          </p>
+          <pre className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-lg text-xs font-mono max-w-lg overflow-x-auto mb-6 text-left">
+            {this.state.error?.message || String(this.state.error)}
+          </pre>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }}
+              className="px-5 py-2.5 bg-blue-600 text-white rounded-xl font-medium text-sm shadow-md hover:bg-blue-700 transition"
+            >
+              Reload Page
+            </button>
+            <button
+              onClick={() => { this.setState({ hasError: false, error: null }); window.location.href = '/'; }}
+              className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-medium text-sm hover:bg-gray-200 transition"
+            >
+              Go to Home
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 const Sidebar = lazy(() => import('./Sidebar'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const StudentDetail = lazy(() => import('./pages/StudentDetail'));
@@ -350,8 +396,11 @@ function App() {
       };
 
       setCurrentUser(userData);
+      localStorage.setItem('isSSO', 'false');
       localStorage.setItem('currentUser', JSON.stringify(userData));
       localStorage.setItem('authToken', token);
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userData));
       setIsAuthenticated(true);
       navigate('/');
       return true;
@@ -361,16 +410,156 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
-    // It's good practice to also notify the backend of logout
-    fetch(apiUrl('/api/auth/logout'), { method: 'POST' }).catch(err => console.warn("Logout notification failed", err));
+  const handleSSOLogin = (token, user) => {
+    console.log('[App] handleSSOLogin invoked with user:', user);
+    const userData = {
+      name: user?.name || user?.username,
+      employeeName: user?.employeeName || user?.name || null,
+      employee_name: user?.employee_name || user?.name || null,
+      empNo: user?.empNo || user?.employeeId || null,
+      emp_no: user?.empNo || user?.employeeId || null,
+      role: user?.role || 'Editor',
+      id: user?.id || user?._id,
+      permissions: user?.permissions || [],
+      assignedCollege: user?.assignedCollege || user?.assignedBranch || null,
+      assignedBranch: user?.assignedCollege || user?.assignedBranch || null,
+    };
+
+    setCurrentUser(userData);
+    localStorage.setItem('isSSO', 'true');
+    localStorage.setItem('currentUser', JSON.stringify(userData));
+    localStorage.setItem('authToken', token);
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(userData));
+    setIsAuthenticated(true);
+    console.log('[App] ✅ SSO session stored in localStorage. Redirecting to /');
+    navigate('/', { replace: true });
+  };
+
+  const CRM_PORTAL_URL = 'https://crm.pydah.edu.in';
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true);
+  };
+
+  const executeLogout = async () => {
+    setIsLoggingOut(true);
+    const isSSO = localStorage.getItem('isSSO') === 'true';
+
+    // 1. Notify backend
+    try {
+      await fetch(apiUrl('/api/auth/logout'), { method: 'POST' });
+    } catch (err) {
+      console.warn("Logout notification failed", err);
+    }
+
+    // 2. Remove switcher
+    const script = document.getElementById('pydah-portal-switcher-script');
+    if (script) script.remove();
+    if (window.PydahSwitcher?.destroy) {
+      try { window.PydahSwitcher.destroy(); } catch (_) {}
+    }
+    document.querySelectorAll('#pydah-portal-switcher, .pydah-portal-switcher, [id*="pydah-switcher"], [class*="pydah-switcher"]').forEach(el => el.remove());
+
+    // 3. Clear local session data
+    localStorage.removeItem('isSSO');
     localStorage.removeItem('currentUser');
     localStorage.removeItem('isAuthenticated');
     localStorage.removeItem('authToken');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    sessionStorage.clear();
+
     setIsAuthenticated(false);
     setCurrentUser(null);
-    // The component will re-render to the public routes, and the Navigate path="*" will send them to "/" (HomePage)
+    setShowLogoutModal(false);
+    setIsLoggingOut(false);
+
+    // 4. Redirect accordingly
+    if (isSSO) {
+      window.location.href = CRM_PORTAL_URL;
+    } else {
+      navigate('/login', { replace: true });
+    }
   };
+
+  // Close logout modal on ESC
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && showLogoutModal && !isLoggingOut) {
+        setShowLogoutModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showLogoutModal, isLoggingOut]);
+
+  // Conditionally load and display Pydah Universal Portal Switcher ONLY for SSO users
+  useEffect(() => {
+    const isSSO = localStorage.getItem('isSSO') === 'true';
+    const activeToken = localStorage.getItem('authToken') || localStorage.getItem('token');
+
+    if (isAuthenticated && isSSO && currentUser && activeToken) {
+      let script = document.getElementById('pydah-portal-switcher-script');
+      if (!script) {
+        script = document.createElement('script');
+        script.id = 'pydah-portal-switcher-script';
+        script.src = 'https://crm.pydah.edu.in/portal-switcher.js';
+        script.async = true;
+        script.setAttribute('data-current-portal', 'stationary-management');
+        script.onload = () => {
+          if (window.PydahSwitcher) {
+            window.PydahSwitcher.init({
+              currentPortal: 'stationary-management',
+              token: activeToken,
+              user: {
+                id: currentUser.id || currentUser._id,
+                username: currentUser.name || currentUser.username,
+                employeeId: currentUser.empNo || currentUser.emp_no,
+                role: currentUser.role
+              },
+              position: 'bottom-right'
+            });
+          }
+        };
+        document.body.appendChild(script);
+      } else if (window.PydahSwitcher) {
+        window.PydahSwitcher.init({
+          currentPortal: 'stationary-management',
+          token: activeToken,
+          user: {
+            id: currentUser.id || currentUser._id,
+            username: currentUser.name || currentUser.username,
+            employeeId: currentUser.empNo || currentUser.emp_no,
+            role: currentUser.role
+          },
+          position: 'bottom-right'
+        });
+      }
+    } else {
+      // Clean up switcher script and any switcher elements when not an SSO session
+      const script = document.getElementById('pydah-portal-switcher-script');
+      if (script) {
+        script.remove();
+      }
+      if (window.PydahSwitcher?.destroy) {
+        try { window.PydahSwitcher.destroy(); } catch (_) {}
+      }
+      // Remove any DOM elements inserted by the portal switcher
+      document.querySelectorAll('#pydah-portal-switcher, .pydah-portal-switcher, [id*="pydah-switcher"], [class*="pydah-switcher"]').forEach(el => el.remove());
+    }
+  }, [currentUser, isAuthenticated]);
+
+  // If user arrives with ?token= or ?ssoToken= on any route, forward to /login to process SSO
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const token = searchParams.get('token') || searchParams.get('ssoToken');
+    if (token && window.location.pathname !== '/login') {
+      navigate(`/login${window.location.search}`, { replace: true });
+    }
+  }, [navigate]);
 
   // Loading animation component
   const LoadingScreen = () => (
@@ -416,7 +605,7 @@ function App() {
         {isAuthenticated ? (
           <>
             <Sidebar
-              onLogout={handleLogout}
+              onLogout={handleLogoutClick}
               isMobile={isMobile}
               sidebarOpen={sidebarOpen}
               setSidebarOpen={setSidebarOpen}
@@ -426,7 +615,6 @@ function App() {
             flex-1 min-h-screen bg-gray-50 flex justify-center items-start transition-all duration-300
             ${isMobile ? 'ml-0' : (sidebarOpen ? 'ml-52' : 'ml-20')}
             ${isMobile ? 'pt-20 px-4' : 'px-8'}
-            }
           `}>
               {isMobile && (
                 <button
@@ -437,6 +625,7 @@ function App() {
                 </button>
               )}
               <div className="w-full  mx-auto">
+                <ErrorBoundary>
                 <Routes>
                   {/* Dashboard is the default route for authenticated users */}
                   <Route
@@ -598,16 +787,122 @@ function App() {
                   />
                   <Route path="*" element={<Navigate to="/" />} />
                 </Routes>
+                </ErrorBoundary>
               </div>
             </main>
           </>
         ) : (
           <Routes>
             <Route path="/" element={<HomePage />} />
-            <Route path="/login" element={<Login onLogin={handleLogin} />} />
+            <Route path="/login" element={<Login onLogin={handleLogin} onSSOLogin={handleSSOLogin} />} />
             {/* Unauthenticated users attempting to access any other path are redirected to HomePage ('/') */}
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
+        )}
+
+        {/* Logout Confirmation Modal */}
+        {showLogoutModal && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm transition-opacity"
+            onClick={() => !isLoggingOut && setShowLogoutModal(false)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-100 transform transition-all animate-in fade-in zoom-in-95 duration-150"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-sm ${
+                      localStorage.getItem('isSSO') === 'true'
+                        ? 'bg-blue-100 text-blue-600'
+                        : 'bg-red-100 text-red-600'
+                    }`}
+                  >
+                    {localStorage.getItem('isSSO') === 'true' ? (
+                      <ExternalLink size={24} />
+                    ) : (
+                      <LogOut size={24} />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">
+                      Confirm Logout
+                    </h3>
+                    <p className="text-xs text-gray-500 font-medium">
+                      {localStorage.getItem('isSSO') === 'true'
+                        ? 'Single Sign-On Session'
+                        : 'Stationary Session'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => !isLoggingOut && setShowLogoutModal(false)}
+                  className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                  disabled={isLoggingOut}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="mb-6 space-y-3">
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  {localStorage.getItem('isSSO') === 'true' ? (
+                    <>
+                      Are you sure you want to log out? Since you logged in via <strong>Single Sign-On (SSO)</strong>, logging out will end your session and redirect you back to the CRM Central Portal.
+                    </>
+                  ) : (
+                    'Are you sure you want to log out of Stationary Management?'
+                  )}
+                </p>
+
+                {localStorage.getItem('isSSO') === 'true' && (
+                  <div className="flex items-center gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs font-medium text-blue-800">
+                    <ExternalLink size={15} className="shrink-0 text-blue-600" />
+                    <span>Destination: <strong>https://crm.pydah.edu.in</strong></span>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowLogoutModal(false)}
+                  disabled={isLoggingOut}
+                  className="px-4 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-medium text-sm hover:bg-gray-50 active:bg-gray-100 transition-colors disabled:opacity-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={executeLogout}
+                  disabled={isLoggingOut}
+                  className={`px-5 py-2.5 rounded-xl text-white font-medium text-sm shadow-md transition-all flex items-center gap-2 disabled:opacity-60 cursor-pointer ${
+                    localStorage.getItem('isSSO') === 'true'
+                      ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-blue-500/25'
+                      : 'bg-red-600 hover:bg-red-700 shadow-red-500/25'
+                  }`}
+                >
+                  {isLoggingOut ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>Logging out...</span>
+                    </>
+                  ) : (
+                    <>
+                      <LogOut size={16} />
+                      <span>
+                        {localStorage.getItem('isSSO') === 'true'
+                          ? 'Logout & Return to CRM'
+                          : 'Logout'}
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </Suspense>

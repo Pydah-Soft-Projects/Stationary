@@ -19,26 +19,12 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Check Changed Paths
-        uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            frontend:
-              - 'frontend/**'
-              - '.github/workflows/deploy.yml'
-            backend:
-              - 'backend/**'
-              - '.github/workflows/deploy.yml'
-
       - name: Setup Node.js (Frontend)
-        if: steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Cache Frontend Dependencies
-        if: steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         id: frontend-cache
         uses: actions/cache@v4
         with:
@@ -46,12 +32,11 @@ jobs:
           key: ${{ runner.os }}-frontend-modules-${{ hashFiles('frontend/package-lock.json', 'frontend/package.json') }}
 
       - name: Install Frontend Dependencies
-        if: (steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch') && steps.frontend-cache.outputs.cache-hit != 'true'
+        if: steps.frontend-cache.outputs.cache-hit != 'true'
         working-directory: frontend
         run: npm install
 
       - name: Build Frontend
-        if: steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         working-directory: frontend
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
@@ -60,7 +45,6 @@ jobs:
           tar -czf ../dist.tar.gz -C dist .
 
       - name: Upload Frontend Build to Server
-        if: steps.filter.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_IP || secrets.HOST_DNS }}
@@ -98,10 +82,11 @@ jobs:
               echo "✅ Frontend build successfully deployed to frontend/dist."
             fi
 
-            # Pull latest changes from git
-            echo "🔄 Pulling latest changes from git..."
+            # Pull latest changes from git cleanly (force sync to avoid merge conflicts on server)
+            echo "🔄 Fetching and syncing latest changes from git..."
             PREV_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
-            git pull origin main
+            git fetch origin main
+            git reset --hard origin/main
             NEW_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
 
             # Check if backend or root dependencies changed
@@ -134,13 +119,13 @@ jobs:
               echo "⏩ Node packages have not changed. Skipping npm install."
             fi
 
-            # Restart/Reload processes with PM2 ecosystem
-            echo "🚀 Reloading backend with PM2 ecosystem..."
+            # Restart processes with PM2
+            echo "🚀 Restarting backend processes with PM2..."
             if [ -f "backend/ecosystem.config.js" ]; then
-              pm2 startOrReload backend/ecosystem.config.js --update-env
+              pm2 restart backend/ecosystem.config.js --update-env || pm2 start backend/ecosystem.config.js
             elif [ -f "ecosystem.config.js" ]; then
-              pm2 startOrReload ecosystem.config.js --update-env
+              pm2 restart ecosystem.config.js --update-env || pm2 start ecosystem.config.js
             else
-              pm2 restart all
+              pm2 restart all --update-env
             fi
             pm2 save
