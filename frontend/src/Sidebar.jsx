@@ -70,7 +70,7 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
     // { path: '/student-management', label: 'Manage Students', icon: Users, permissionKey: 'student-management' }, // REMOVED
     { path: '/students-dashboard', label: 'Student Dashboard', icon: GraduationCap, permissionKey: 'course-dashboard' },
     { path: '/employees-dashboard', label: 'Employee Dashboard', icon: Briefcase, permissionKey: 'employee-dashboard' },
-    { path: '/sub-admin-management', label: 'Usermanagement', icon: UserPlus, superAdminOnly: true },
+    { path: '/sub-admin-management', label: 'User Management', icon: UserPlus, superAdminOnly: true },
     { path: '/courses', label: 'College and Courses', icon: GraduationCap, permissionKey: 'courses' },
     { path: '/manage-stock', label: 'Academic Stock', icon: List, permissionKeys: ['stock-products', 'stock-add', 'stock-entries', 'stock-vendors', 'manage-stock'] },
     { path: '/stock-transfers', label: 'Stock Transfers', icon: ArrowRightLeft, permissionKey: 'stock-transfers' },

@@ -254,7 +254,8 @@ export const exportDailyBreakdownReportExcel = async ({
     dailyTotalsOnline,
     dailyRevenue,
     dailyTransferRevenue,
-    monthName
+    monthName,
+    dateRangeText,
   } = report;
   const totalCols = 2 + days.length + 1;
   const workbook = new ExcelJS.Workbook();
@@ -272,16 +273,19 @@ export const exportDailyBreakdownReportExcel = async ({
   sheet.mergeCells(rowNum, 1, rowNum, totalCols);
   const titleCell = sheet.getCell(rowNum, 1);
   const filterTitle = paymentFilter === 'cash' ? ' (Cash Sales)' : (paymentFilter === 'online' ? ' (Online Sales)' : ' (All Sales)');
+  const dateRangeSuffix = dateRangeText ? ` (${dateRangeText})` : '';
   titleCell.value = warehouseName
-    ? `Daily Breakdown${filterTitle} - ${monthName} (${warehouseName})`
-    : `Daily Breakdown${filterTitle} - ${monthName}`;
+    ? `Daily Breakdown${filterTitle} - ${monthName}${dateRangeSuffix} (${warehouseName})`
+    : `Daily Breakdown${filterTitle} - ${monthName}${dateRangeSuffix}`;
   titleCell.font = { bold: true, size: 14, color: { argb: COLORS.bodyFont } };
   rowNum += 1;
 
   sheet.mergeCells(rowNum, 1, rowNum, totalCols);
   const subtitleCell = sheet.getCell(rowNum, 1);
   const filterDesc = paymentFilter === 'cash' ? ' (Cash Sales)' : (paymentFilter === 'online' ? ' (Online Sales)' : ' (All Sales)');
-  subtitleCell.value = `Daily breakdown of sales for selected month${filterDesc}`;
+  subtitleCell.value = dateRangeText
+    ? `Daily breakdown of sales for date range: ${dateRangeText}${filterDesc}`
+    : `Daily breakdown of sales for selected month${filterDesc}`;
   subtitleCell.font = { size: 10, color: { argb: 'FF6B7280' } };
   rowNum += 2;
 
@@ -387,7 +391,8 @@ export const exportDailyBreakdownReportExcel = async ({
 
   const dateStamp = new Date().toISOString().split('T')[0];
   const monthPart = sanitizeFilename(monthName);
+  const dateRangePart = dateRangeText ? `_${sanitizeFilename(dateRangeText)}` : '';
   const warehousePart = warehouseName ? `_${sanitizeFilename(warehouseName)}` : '';
   const filterPart = paymentFilter !== 'all' ? `_${paymentFilter}` : '';
-  await downloadWorkbook(workbook, `Daily_Breakdown_${monthPart}${warehousePart}${filterPart}_${dateStamp}.xlsx`);
+  await downloadWorkbook(workbook, `Daily_Breakdown_${monthPart}${dateRangePart}${warehousePart}${filterPart}_${dateStamp}.xlsx`);
 };
