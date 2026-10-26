@@ -11,6 +11,56 @@ const getTodayDate = () => {
   const today = new Date();
   return today.toISOString().split('T')[0];
 };
+
+const getMonthDateRange = (monthKey) => {
+  if (!monthKey) return { start: '', end: '' };
+  const [yearStr, monthStr] = monthKey.split('-');
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const lastDay = new Date(year, month, 0).getDate();
+  const start = `${monthKey}-01`;
+  const end = `${monthKey}-${String(lastDay).padStart(2, '0')}`;
+  return { start, end };
+};
+
+const formatOptionDate = (isoDateStr) => {
+  if (!isoDateStr) return '';
+  const [y, m, d] = isoDateStr.split('-');
+  const date = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+  return date.toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
+};
+
+const getCoveredMonthsLabel = (startStr, endStr, fallbackMonthName) => {
+  if (!startStr && !endStr) return fallbackMonthName || '';
+  if (startStr && endStr) {
+    const startM = startStr.substring(0, 7);
+    const endM = endStr.substring(0, 7);
+    if (startM === endM) {
+      const [y, m] = startM.split('-');
+      const dt = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+      return dt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+    const [y1, m1] = startM.split('-');
+    const [y2, m2] = endM.split('-');
+    const dt1 = new Date(parseInt(y1, 10), parseInt(m1, 10) - 1, 1);
+    const dt2 = new Date(parseInt(y2, 10), parseInt(m2, 10) - 1, 1);
+    const name1 = dt1.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    const name2 = dt2.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    return `${name1} - ${name2}`;
+  }
+  if (startStr) {
+    const [y, m] = startStr.substring(0, 7).split('-');
+    const dt = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+    return `From ${dt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+  }
+  if (endStr) {
+    const [y, m] = endStr.substring(0, 7).split('-');
+    const dt = new Date(parseInt(y, 10), parseInt(m, 10) - 1, 1);
+    return `Up to ${dt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+  }
+  return fallbackMonthName || '';
+};
+
 const Reports = ({ currentUser }) => {
   // Check access level
   const isSuperAdmin = currentUser?.role === 'Administrator';
@@ -71,6 +121,8 @@ const Reports = ({ currentUser }) => {
   const [products, setProducts] = useState([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [selectedMonthForDaily, setSelectedMonthForDaily] = useState(null); // For daily breakdown view
+  const [dailyStartDate, setDailyStartDate] = useState('');
+  const [dailyEndDate, setDailyEndDate] = useState('');
   const [dailyPaymentFilter, setDailyPaymentFilter] = useState('all'); // 'all', 'cash', 'online'
   const [currentPage, setCurrentPage] = useState(1);
   const [branchTransferPage, setBranchTransferPage] = useState(1);
@@ -914,6 +966,59 @@ const Reports = ({ currentUser }) => {
     return Array.from(monthMap.values()).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
   }, [revenueEligibleTransactions, getReportDate, getItemPaymentSplit]);
 
+  const handleMonthChange = useCallback((newMonthKey) => {
+    setSelectedMonthForDaily(newMonthKey || null);
+    if (!newMonthKey) {
+      setDailyStartDate('');
+      setDailyEndDate('');
+    } else if (newMonthKey === 'custom') {
+      // Keep existing date range if set, otherwise leave open for user selection
+    } else {
+      const range = getMonthDateRange(newMonthKey);
+      setDailyStartDate(range.start);
+      setDailyEndDate(range.end);
+    }
+  }, []);
+
+  const handleResetDailyDateRange = useCallback(() => {
+    if (selectedMonthForDaily && selectedMonthForDaily !== 'custom') {
+      const range = getMonthDateRange(selectedMonthForDaily);
+      setDailyStartDate(range.start);
+      setDailyEndDate(range.end);
+    } else if (monthlyStats.length > 0) {
+      const currentMonthKey = getCurrentMonthKey();
+      const currentMonthExists = monthlyStats.some(m => m.monthKey === currentMonthKey);
+      const targetMonth = currentMonthExists ? currentMonthKey : monthlyStats[0].monthKey;
+      setSelectedMonthForDaily(targetMonth);
+      const range = getMonthDateRange(targetMonth);
+      setDailyStartDate(range.start);
+      setDailyEndDate(range.end);
+    } else {
+      setDailyStartDate('');
+      setDailyEndDate('');
+    }
+  }, [selectedMonthForDaily, monthlyStats]);
+
+  const activeMonthDropdownValue = useMemo(() => {
+    if (selectedMonthForDaily === 'custom') return 'custom';
+    if (dailyStartDate && dailyEndDate) {
+      const startM = dailyStartDate.substring(0, 7);
+      const endM = dailyEndDate.substring(0, 7);
+      if (startM !== endM) {
+        return 'custom';
+      }
+      return startM;
+    }
+    return selectedMonthForDaily || '';
+  }, [selectedMonthForDaily, dailyStartDate, dailyEndDate]);
+
+  const isCustomDailyRangeActive = useMemo(() => {
+    if (!selectedMonthForDaily) return Boolean(dailyStartDate || dailyEndDate);
+    if (selectedMonthForDaily === 'custom') return Boolean(dailyStartDate || dailyEndDate);
+    const range = getMonthDateRange(selectedMonthForDaily);
+    return Boolean((dailyStartDate && dailyStartDate !== range.start) || (dailyEndDate && dailyEndDate !== range.end));
+  }, [selectedMonthForDaily, dailyStartDate, dailyEndDate]);
+
   // Set default to current month when switching to daily breakdown sub-tab or when monthlyStats is available
   useEffect(() => {
     if (activeTab === 'monthly' && monthlyReportSubTab === 'daily-breakdown' && monthlyStats.length > 0) {
@@ -925,12 +1030,12 @@ const Reports = ({ currentUser }) => {
 
         if (currentMonthExists) {
           // If current month exists, set it
-          setSelectedMonthForDaily(currentMonthKey);
+          handleMonthChange(currentMonthKey);
         } else {
           // If current month doesn't exist, select the most recent month
           const mostRecentMonth = monthlyStats[0]; // monthlyStats is sorted by most recent first
           if (mostRecentMonth) {
-            setSelectedMonthForDaily(mostRecentMonth.monthKey);
+            handleMonthChange(mostRecentMonth.monthKey);
           }
         }
       }
@@ -1036,12 +1141,38 @@ const Reports = ({ currentUser }) => {
     return product ? (product.price || 0) : 0;
   }, [products]);
 
-  // Calculate daily breakdown with items as rows and days as columns for selected month
+  // Calculate daily breakdown with items as rows and days as columns for selected month or date range
   const dailyBreakdownReport = useMemo(() => {
-    if (!selectedMonthForDaily) return null;
+    if (!selectedMonthForDaily && !dailyStartDate && !dailyEndDate) return null;
 
     const selectedMonth = monthlyStats.find(m => m.monthKey === selectedMonthForDaily);
-    if (!selectedMonth || !selectedMonth.dayWiseBreakdown || selectedMonth.dayWiseBreakdown.length === 0) {
+
+    // Determine if date range spans across months or is custom
+    const isCrossMonth = Boolean(
+      selectedMonthForDaily === 'custom' ||
+      (dailyStartDate && dailyEndDate && dailyStartDate.substring(0, 7) !== dailyEndDate.substring(0, 7)) ||
+      (dailyStartDate && selectedMonthForDaily && selectedMonthForDaily !== 'custom' && !dailyStartDate.startsWith(selectedMonthForDaily)) ||
+      (dailyEndDate && selectedMonthForDaily && selectedMonthForDaily !== 'custom' && !dailyEndDate.startsWith(selectedMonthForDaily))
+    );
+
+    let candidateDays = [];
+    if (!isCrossMonth && selectedMonth?.dayWiseBreakdown) {
+      candidateDays = selectedMonth.dayWiseBreakdown;
+    } else {
+      candidateDays = monthlyStats.flatMap(m => m.dayWiseBreakdown || []);
+    }
+
+    if (candidateDays.length === 0) {
+      return null;
+    }
+
+    const filteredDayWiseBreakdown = candidateDays.filter(day => {
+      if (dailyStartDate && day.date < dailyStartDate) return false;
+      if (dailyEndDate && day.date > dailyEndDate) return false;
+      return true;
+    });
+
+    if (filteredDayWiseBreakdown.length === 0) {
       return null;
     }
 
@@ -1053,7 +1184,7 @@ const Reports = ({ currentUser }) => {
     const dailyRevenue = new Map(); // dayKey -> revenue (includes student + paid college/branch transfers)
     const dailyTransferRevenue = new Map(); // dayKey -> revenue from college/branch transfers only (for table row)
 
-    selectedMonth.dayWiseBreakdown.forEach(day => {
+    filteredDayWiseBreakdown.forEach(day => {
       const dayKey = day.date; // Format: YYYY-MM-DD
       allDays.add(dayKey);
       const txs = day.transactions || [];
@@ -1158,6 +1289,22 @@ const Reports = ({ currentUser }) => {
       dailyTotalsOnline.set(dayKey, onlineTotal);
     });
 
+    const formatDisplayDate = (dStr) => {
+      if (!dStr) return '';
+      const [y, m, d] = dStr.split('-');
+      const dt = new Date(parseInt(y, 10), parseInt(m, 10) - 1, parseInt(d, 10));
+      return dt.toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    let dateRangeText = null;
+    if (dailyStartDate && dailyEndDate) {
+      dateRangeText = `${formatDisplayDate(dailyStartDate)} to ${formatDisplayDate(dailyEndDate)}`;
+    } else if (dailyStartDate) {
+      dateRangeText = `From ${formatDisplayDate(dailyStartDate)}`;
+    } else if (dailyEndDate) {
+      dateRangeText = `Up to ${formatDisplayDate(dailyEndDate)}`;
+    }
+
     return {
       items: sortedItems,
       days: dayNames,
@@ -1169,9 +1316,14 @@ const Reports = ({ currentUser }) => {
       dailyTotalsOnline: dailyTotalsOnline,
       dailyRevenue: dailyRevenue,
       dailyTransferRevenue: dailyTransferRevenue,
-      monthName: selectedMonth.month
+      monthName: getCoveredMonthsLabel(
+        dailyStartDate,
+        dailyEndDate,
+        selectedMonth?.month || 'Selected Period'
+      ),
+      dateRangeText,
     };
-  }, [selectedMonthForDaily, monthlyStats, dailyPaymentFilter]);
+  }, [selectedMonthForDaily, monthlyStats, dailyPaymentFilter, dailyStartDate, dailyEndDate]);
 
   const warehouseName = selectedCollegeData?.name || '';
 
@@ -3159,14 +3311,16 @@ const Reports = ({ currentUser }) => {
                               {dailyPaymentFilter === 'all' && <span className="text-green-600 ml-2 font-medium text-lg">(All Sales)</span>}
                             </h2>
                             <p className="text-sm text-gray-600 mt-1">
-                              Daily breakdown of sales for selected month
+                              {isCustomDailyRangeActive && dailyBreakdownReport?.dateRangeText
+                                ? `Daily breakdown of sales for ${dailyBreakdownReport.dateRangeText}`
+                                : 'Daily breakdown of sales for selected month'}
                             </p>
                           </div>
                         </>
                       )}
                     </div>
-                    <div className="flex items-center gap-3">
-                      {/* Month Selector - Show only when Daily Breakdown is selected */}
+                    <div className="flex items-center flex-wrap gap-3">
+                      {/* Month Selector & Date Range - Show only when Daily Breakdown is selected */}
                       {monthlyReportSubTab === 'daily-breakdown' && (
                         <>
                           <select
@@ -3179,17 +3333,68 @@ const Reports = ({ currentUser }) => {
                             <option value="online">Online Sales</option>
                           </select>
                           <select
-                            value={selectedMonthForDaily || ''}
-                            onChange={(e) => setSelectedMonthForDaily(e.target.value || null)}
+                            value={activeMonthDropdownValue}
+                            onChange={(e) => handleMonthChange(e.target.value)}
                             className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm font-medium"
                           >
                             <option value="">Select a month</option>
-                            {monthlyStats.map((month) => (
-                              <option key={month.monthKey} value={month.monthKey}>
-                                {month.month}
-                              </option>
-                            ))}
+                            <option value="custom">Custom Range (Across Months)</option>
+                            {monthlyStats.map((month) => {
+                              const range = getMonthDateRange(month.monthKey);
+                              const startFmt = formatOptionDate(range.start);
+                              const endFmt = formatOptionDate(range.end);
+                              return (
+                                <option key={month.monthKey} value={month.monthKey}>
+                                  {month.month} ({startFmt} - {endFmt})
+                                </option>
+                              );
+                            })}
                           </select>
+                          {(selectedMonthForDaily || dailyStartDate || dailyEndDate) && (
+                            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-300 rounded-lg px-2.5 py-1 text-xs font-medium text-gray-700 shadow-sm">
+                              <Calendar size={14} className="text-gray-500 flex-shrink-0" />
+                              <span className="text-gray-500 whitespace-nowrap">Date:</span>
+                              <input
+                                type="date"
+                                value={dailyStartDate}
+                                max={dailyEndDate || undefined}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setDailyStartDate(val);
+                                  if (dailyEndDate && val > dailyEndDate) {
+                                    setDailyEndDate(val);
+                                  }
+                                }}
+                                className="border border-gray-300 rounded px-1.5 py-1 text-xs bg-white text-gray-800 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                title="Start Date"
+                              />
+                              <span className="text-gray-400">to</span>
+                              <input
+                                type="date"
+                                value={dailyEndDate}
+                                min={dailyStartDate || undefined}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  setDailyEndDate(val);
+                                  if (dailyStartDate && val < dailyStartDate) {
+                                    setDailyStartDate(val);
+                                  }
+                                }}
+                                className="border border-gray-300 rounded px-1.5 py-1 text-xs bg-white text-gray-800 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                title="End Date"
+                              />
+                              {isCustomDailyRangeActive && (
+                                <button
+                                  type="button"
+                                  onClick={handleResetDailyDateRange}
+                                  className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors ml-0.5"
+                                  title="Reset date range to full month"
+                                >
+                                  <X size={14} />
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </>
                       )}
                       <button
@@ -3230,12 +3435,8 @@ const Reports = ({ currentUser }) => {
                             if (monthlyStats.length > 0) {
                               const currentMonthKey = getCurrentMonthKey();
                               const currentMonthExists = monthlyStats.some(m => m.monthKey === currentMonthKey);
-                              if (currentMonthExists) {
-                                setSelectedMonthForDaily(currentMonthKey);
-                              } else if (monthlyStats.length > 0) {
-                                // Select most recent month if current month doesn't have data
-                                setSelectedMonthForDaily(monthlyStats[0].monthKey);
-                              }
+                              const targetMonth = currentMonthExists ? currentMonthKey : monthlyStats[0].monthKey;
+                              handleMonthChange(targetMonth);
                             }
                           }}
                           className={`px-4 py-2 text-sm font-medium transition-colors rounded-md ${monthlyReportSubTab === 'daily-breakdown'
@@ -3414,19 +3615,40 @@ const Reports = ({ currentUser }) => {
                 {/* Daily Breakdown Content */}
                 {monthlyReportSubTab === 'daily-breakdown' && (
                   <div className="p-6">
-                    {selectedMonthForDaily && (
+                    {(selectedMonthForDaily || dailyStartDate || dailyEndDate) && (
                       (() => {
                         const selectedMonth = monthlyStats.find(m => m.monthKey === selectedMonthForDaily);
-                        if (!selectedMonth || !selectedMonth.dayWiseBreakdown || selectedMonth.dayWiseBreakdown.length === 0) {
+                        const allMonthlyDays = monthlyStats.flatMap(m => m.dayWiseBreakdown || []);
+                        if (allMonthlyDays.length === 0) {
                           return (
                             <div className="text-center py-8 text-gray-500">
-                              No daily data available for this month
+                              No daily data available
                             </div>
                           );
                         }
 
-                        // Calculate filtered totals for summary cards
-                        const nonTransferTxs = selectedMonth.transactions.filter(
+                        // Check if candidate pool should be cross-month or single month
+                        const isCrossMonthRange = Boolean(
+                          selectedMonthForDaily === 'custom' ||
+                          (dailyStartDate && dailyEndDate && dailyStartDate.substring(0, 7) !== dailyEndDate.substring(0, 7)) ||
+                          (dailyStartDate && selectedMonthForDaily && selectedMonthForDaily !== 'custom' && !dailyStartDate.startsWith(selectedMonthForDaily)) ||
+                          (dailyEndDate && selectedMonthForDaily && selectedMonthForDaily !== 'custom' && !dailyEndDate.startsWith(selectedMonthForDaily))
+                        );
+
+                        const candidateTxs = isCrossMonthRange || !selectedMonth
+                          ? revenueEligibleTransactions
+                          : selectedMonth.transactions;
+
+                        // Filter transactions according to dailyStartDate and dailyEndDate
+                        const filteredTransactions = candidateTxs.filter(t => {
+                          const date = getReportDate(t);
+                          const d = date.toISOString().split('T')[0];
+                          if (dailyStartDate && d < dailyStartDate) return false;
+                          if (dailyEndDate && d > dailyEndDate) return false;
+                          return true;
+                        });
+
+                        const nonTransferTxs = filteredTransactions.filter(
                           t => t.transactionType !== 'college_transfer' && t.transactionType !== 'branch_transfer'
                         );
 
@@ -3473,10 +3695,10 @@ const Reports = ({ currentUser }) => {
                             return isOnline(method) || method === 'split';
                           }).length;
                         } else {
-                          cardTotalAmount = selectedMonth.totalAmount;
-                          cardPaidAmount = selectedMonth.paidAmount;
-                          cardUnpaidAmount = selectedMonth.unpaidAmount;
-                          cardTxCount = selectedMonth.transactions.length;
+                          cardTotalAmount = nonTransferTxs.reduce((sum, t) => sum + (t.totalAmount || 0), 0);
+                          cardPaidAmount = nonTransferTxs.filter(t => t.isPaid).reduce((sum, t) => sum + (t.totalAmount || 0), 0);
+                          cardUnpaidAmount = nonTransferTxs.filter(t => !t.isPaid).reduce((sum, t) => sum + (t.totalAmount || 0), 0);
+                          cardTxCount = filteredTransactions.length;
                         }
 
                         return (
@@ -3725,8 +3947,16 @@ const Reports = ({ currentUser }) => {
                                 </table>
                               </div>
                             ) : (
-                              <div className="text-center py-8 text-gray-500">
-                                Loading daily breakdown data...
+                              <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg border border-gray-200">
+                                <p className="font-medium text-gray-700">No daily transactions found for the selected date range.</p>
+                                <button
+                                  type="button"
+                                  onClick={handleResetDailyDateRange}
+                                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors"
+                                >
+                                  <RefreshCw size={13} />
+                                  <span>Reset to full month</span>
+                                </button>
                               </div>
                             )}
                           </div>
