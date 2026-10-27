@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Eye, Users, ClipboardList, Building2, AlertCircle, Download, RefreshCw, ChevronLeft, ChevronRight, X, FileText, Calendar } from 'lucide-react';
+import { Search, Eye, Users, ClipboardList, Building2, AlertCircle, Download, RefreshCw, ChevronLeft, ChevronRight, X, FileText, Calendar, ChevronDown } from 'lucide-react';
 import { apiUrl } from '../utils/api';
 import jsPDF from 'jspdf';
 import { normalizeCourseName, hasViewAccess } from '../utils/permissions';
+
 import useOnlineStatus from '../hooks/useOnlineStatus'; // Assuming this hook exists or we can use navigator.onLine check, but let's check imports in StudentDashboard
 // Actually StudentDashboard uses useOnlineStatus. Let's check if we need it here.
 // The file previously didn't use it. Let's stick to what's needed.
@@ -34,6 +35,47 @@ const getProductYears = (product) => {
 
 const formatCurrency = (amount = 0) => `₹${Number(amount || 0).toFixed(2)}`;
 
+const getStatusDotColor = (status = '') => {
+  const s = String(status).toLowerCase();
+  if (s.includes('regular') || s === 'active') return 'bg-emerald-500';
+  if (s.includes('complet')) return 'bg-blue-500';
+  if (s.includes('cancel')) return 'bg-red-500';
+  if (s.includes('detained')) return 'bg-amber-500';
+  if (s.includes('discontinued')) return 'bg-rose-500';
+  if (s.includes('absent')) return 'bg-orange-500';
+  if (s.includes('rejoin')) return 'bg-purple-500';
+  return 'bg-gray-400';
+};
+
+const getStatusBadge = (status) => {
+  if (!status) return null;
+  const s = String(status).toLowerCase();
+  let colorClass = 'bg-gray-100 text-gray-700 border-gray-200';
+  if (s.includes('regular') || s === 'active') colorClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  else if (s.includes('complet')) colorClass = 'bg-blue-50 text-blue-700 border-blue-200';
+  else if (s.includes('cancel')) colorClass = 'bg-red-50 text-red-700 border-red-200';
+  else if (s.includes('detained')) colorClass = 'bg-amber-50 text-amber-700 border-amber-200';
+  else if (s.includes('discontinued')) colorClass = 'bg-rose-50 text-rose-700 border-rose-200';
+  else if (s.includes('absent')) colorClass = 'bg-orange-50 text-orange-700 border-orange-200';
+  else if (s.includes('rejoin')) colorClass = 'bg-purple-50 text-purple-700 border-purple-200';
+
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${colorClass}`}>
+      {status}
+    </span>
+  );
+};
+
+const DEFAULT_STUDENT_STATUSES = [
+  'Regular',
+  'Course Completed',
+  'Detained',
+  'Long Absent',
+  'Rejoined',
+  'Discontinued',
+  'Admission Cancelled'
+];
+
 const StudentDue = ({ currentUser }) => {
   const navigate = useNavigate();
   const [students, setStudents] = useState([]);
@@ -46,6 +88,12 @@ const StudentDue = ({ currentUser }) => {
   const [productsError, setProductsError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
+  const [availableStatuses, setAvailableStatuses] = useState(DEFAULT_STUDENT_STATUSES);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef(null);
+  const [modalStatusDropdownOpen, setModalStatusDropdownOpen] = useState(false);
+  const modalStatusDropdownRef = useRef(null);
+
   const [stats, setStats] = useState({
     totalStudents: 0,
     totalPendingItems: 0,
@@ -53,7 +101,15 @@ const StudentDue = ({ currentUser }) => {
     impactedCourses: 0
   });
 
-  const [dueFilters, setDueFilters] = useState({ search: '', course: '', year: '', branch: '', semester: '', kit: '' });
+  const [dueFilters, setDueFilters] = useState({
+    search: '',
+    course: '',
+    year: '',
+    branch: '',
+    semester: '',
+    kit: '',
+    selectedStatuses: []
+  });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
@@ -64,6 +120,7 @@ const StudentDue = ({ currentUser }) => {
     semester: '',
     kit: '',
     selectedKits: [], // Array for multiple kit selection
+    selectedStatuses: [], // Array for multiple status selection
     includeSummary: true,
     includeItemDetails: false,
   });
@@ -72,6 +129,7 @@ const StudentDue = ({ currentUser }) => {
     receiptHeader: 'PYDAH GROUP OF INSTITUTIONS',
     receiptSubheader: 'Stationery Management System',
   });
+
 
   // -- Permissions --
   const isSuperAdmin = currentUser?.role === 'Administrator';
@@ -188,7 +246,37 @@ const StudentDue = ({ currentUser }) => {
     fetchCourses(); // From SQL
     fetchProducts();
     fetchSettings();
+
+    const fetchStatuses = async () => {
+      try {
+        const res = await fetch(apiUrl('/api/sql/academic/statuses'));
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setAvailableStatuses(data);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch student statuses:', err);
+      }
+    };
+    fetchStatuses();
   }, [fetchCourses, fetchSettings]);
+
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target)) {
+        setStatusDropdownOpen(false);
+      }
+      if (modalStatusDropdownRef.current && !modalStatusDropdownRef.current.contains(event.target)) {
+        setModalStatusDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
 
   const fetchDues = useCallback(async () => {
     try {
@@ -215,8 +303,12 @@ const StudentDue = ({ currentUser }) => {
         branch: dueFilters.branch,
         year: dueFilters.year,
         semester: dueFilters.semester,
-        kitId: dueFilters.kit // Backend expects kitId
+        kitId: dueFilters.kit, // Backend expects kitId
+        ...(dueFilters.selectedStatuses && dueFilters.selectedStatuses.length > 0
+          ? { studentStatuses: dueFilters.selectedStatuses.join(',') }
+          : {})
       });
+
 
       const response = await fetch(apiUrl(`/api/sql/dues?${query.toString()}`));
       if (!response.ok) throw new Error('Failed to fetch dues');
@@ -492,7 +584,8 @@ const StudentDue = ({ currentUser }) => {
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [dueFilters.search, dueFilters.course, dueFilters.year, dueFilters.branch, dueFilters.semester]);
+  }, [dueFilters.search, dueFilters.course, dueFilters.year, dueFilters.branch, dueFilters.semester, dueFilters.kit, dueFilters.selectedStatuses]);
+
 
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
@@ -519,6 +612,9 @@ const StudentDue = ({ currentUser }) => {
       semester: dueFilters.semester || '',
       kit: dueFilters.kit || '', // Keep for sync, but we use selectedKits mostly now
       selectedKits: dueFilters.kit ? [dueFilters.kit] : [],
+      selectedStatuses: dueFilters.selectedStatuses && dueFilters.selectedStatuses.length > 0
+        ? [...dueFilters.selectedStatuses]
+        : [],
       includeSummary: true,
       includeItemDetails: false,
     });
@@ -537,11 +633,15 @@ const StudentDue = ({ currentUser }) => {
         branch: reportFilters.branch,
         year: reportFilters.year,
         semester: reportFilters.semester,
+        ...(reportFilters.selectedStatuses && reportFilters.selectedStatuses.length > 0
+          ? { studentStatuses: reportFilters.selectedStatuses.join(',') }
+          : {}),
         // Send multiple kit IDs if selected, otherwise fallback to single kit
         ...(reportFilters.selectedKits.length > 0
           ? { kitIds: reportFilters.selectedKits.join(',') }
           : reportFilters.kit ? { kitId: reportFilters.kit } : {})
       });
+
 
       const response = await fetch(apiUrl(`/api/sql/dues?${query.toString()}`));
       if (!response.ok) throw new Error('Failed to fetch report data');
@@ -606,9 +706,13 @@ const StudentDue = ({ currentUser }) => {
         if (reportFilters.includeSummary) {
           pdf.setFontSize(10);
           pdf.setFont(undefined, 'normal');
-          const statsText = `Total Students: ${totalEnrolled} | Paid: ${paidStudents} | Unpaid: ${totalPendingStudents} | Total Due: ${formatCurrencyForPDF(totalPendingAmount)}`;
+          let statsText = `Total Students: ${totalEnrolled} | Paid: ${paidStudents} | Unpaid: ${totalPendingStudents} | Total Due: ${formatCurrencyForPDF(totalPendingAmount)}`;
+          if (reportFilters.selectedStatuses && reportFilters.selectedStatuses.length > 0) {
+            statsText += ` | Status: ${reportFilters.selectedStatuses.join(', ')}`;
+          }
           pdf.text(statsText, 105, 22, { align: 'center' });
         }
+
 
         pdf.setDrawColor(200, 200, 200);
         pdf.line(20, 25, 190, 25);
@@ -801,7 +905,11 @@ const StudentDue = ({ currentUser }) => {
               }
 
               pdf.text((student.name || 'N/A').substring(0, 45), colName, yPos + 2);
-              pdf.text((student.pin || student.studentId || 'N/A'), colRoll, yPos + 2);
+              const rollWithStatus = student.status
+                ? `${student.pin || student.studentId || 'N/A'} [${student.status}]`
+                : (student.pin || student.studentId || 'N/A');
+              pdf.text(rollWithStatus.substring(0, 32), colRoll, yPos + 2);
+
 
               if (reportFilters.includeItemDetails && splitItems) {
                 pdf.text(splitItems, colRemarks, yPos + 2);
@@ -981,13 +1089,97 @@ const StudentDue = ({ currentUser }) => {
               ))}
             </select>
 
+            {/* Student Status Dropdown with Checkboxes */}
+            <div className="relative w-full lg:w-auto" ref={statusDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setStatusDropdownOpen(prev => !prev)}
+                className={`px-3 py-1.5 text-sm border rounded-lg bg-white shadow-sm flex items-center justify-between gap-2 w-full lg:w-auto transition-colors ${
+                  dueFilters.selectedStatuses && dueFilters.selectedStatuses.length > 0
+                    ? 'border-purple-400 text-purple-900 ring-1 ring-purple-400 font-medium'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center gap-1.5 truncate max-w-[190px]">
+                  <span className="text-gray-500 font-normal">Status:</span>
+                  {!dueFilters.selectedStatuses || dueFilters.selectedStatuses.length === 0 ? (
+                    <span className="text-gray-700 font-normal">All</span>
+                  ) : dueFilters.selectedStatuses.length === 1 ? (
+                    <span className="text-purple-700 font-medium truncate">{dueFilters.selectedStatuses[0]}</span>
+                  ) : (
+                    <span className="inline-flex items-center px-1.5 py-0.2 bg-purple-100 text-purple-800 rounded font-semibold text-xs">
+                      {dueFilters.selectedStatuses.length} selected
+                    </span>
+                  )}
+                </div>
+                <ChevronDown
+                  size={14}
+                  className={`text-gray-400 transition-transform duration-150 shrink-0 ${statusDropdownOpen ? 'rotate-180 text-purple-600' : ''}`}
+                />
+              </button>
+
+              {statusDropdownOpen && (
+                <div className="absolute left-0 mt-1.5 w-64 bg-white rounded-xl shadow-xl border border-gray-200 z-50 p-2 animate-in fade-in-50">
+                  <div className="flex items-center justify-between px-2 py-1.5 mb-1 border-b border-gray-100">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">Student Status</span>
+                    <div className="flex items-center gap-2 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setDueFilters({ ...dueFilters, selectedStatuses: [...availableStatuses] })}
+                        className="text-purple-600 hover:text-purple-700 font-medium"
+                      >
+                        Select All
+                      </button>
+                      <span className="text-gray-300">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setDueFilters({ ...dueFilters, selectedStatuses: [] })}
+                        className="text-gray-500 hover:text-gray-700 font-medium"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto space-y-0.5">
+                    {availableStatuses.map(status => {
+                      const isSelected = dueFilters.selectedStatuses?.includes(status);
+                      return (
+                        <label
+                          key={status}
+                          className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-sm cursor-pointer transition-colors ${
+                            isSelected ? 'bg-purple-50 text-purple-900 font-medium' : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              const curr = dueFilters.selectedStatuses || [];
+                              const updated = isSelected
+                                ? curr.filter(s => s !== status)
+                                : [...curr, status];
+                              setDueFilters({ ...dueFilters, selectedStatuses: updated });
+                            }}
+                            className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 cursor-pointer"
+                          />
+                          <span className="truncate flex-1">{status}</span>
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${getStatusDotColor(status)}`}></span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Reset Button */}
             <button
-              onClick={() => setDueFilters({ search: '', course: '', year: '', branch: '', semester: '', kit: '' })}
+              onClick={() => setDueFilters({ search: '', course: '', year: '', branch: '', semester: '', kit: '', selectedStatuses: [] })}
               className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm w-full lg:w-auto ml-auto lg:ml-0"
             >
               Reset
             </button>
+
           </div>
         </div>
 
@@ -1087,13 +1279,17 @@ const StudentDue = ({ currentUser }) => {
                         >
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex flex-col">
-                              <span className="text-sm font-medium text-gray-900">{student.name}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-gray-900">{student.name}</span>
+                                {getStatusBadge(student.status)}
+                              </div>
                               <span className="text-xs text-gray-500">{student.pin || student.studentId}</span>
                               {student.phoneNumber && (
                                 <span className="text-xs text-gray-400 mt-0.5">{student.phoneNumber}</span>
                               )}
                             </div>
                           </td>
+
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">
                               {student.course?.toUpperCase() || 'N/A'}
@@ -1312,6 +1508,106 @@ const StudentDue = ({ currentUser }) => {
                     ))}
                   </select>
                 </div>
+
+                {/* Student Status Filter in Report Modal */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">Student Status Filter</label>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setReportFilters({ ...reportFilters, selectedStatuses: [...availableStatuses] })}
+                        className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                      >
+                        Select All
+                      </button>
+                      <span className="text-gray-300">|</span>
+                      <button
+                        type="button"
+                        onClick={() => setReportFilters({ ...reportFilters, selectedStatuses: [] })}
+                        className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                      >
+                        Clear All
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Dropdown with Checkboxes inside Modal */}
+                  <div className="relative" ref={modalStatusDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setModalStatusDropdownOpen(prev => !prev)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg text-left bg-white text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        {(!reportFilters.selectedStatuses || reportFilters.selectedStatuses.length === 0) ? (
+                          <span className="text-gray-500">All Student Statuses</span>
+                        ) : reportFilters.selectedStatuses.length === 1 ? (
+                          <span className="text-gray-900 font-medium">{reportFilters.selectedStatuses[0]}</span>
+                        ) : (
+                          <span className="text-purple-700 font-medium">{reportFilters.selectedStatuses.length} statuses selected</span>
+                        )}
+                      </div>
+                      <ChevronDown size={16} className={`text-gray-500 transition-transform duration-150 shrink-0 ${modalStatusDropdownOpen ? 'rotate-180 text-purple-600' : ''}`} />
+                    </button>
+
+                    {modalStatusDropdownOpen && (
+                      <div className="absolute left-0 right-0 mt-1.5 bg-white rounded-xl shadow-xl border border-gray-200 z-50 p-2 animate-in fade-in-50">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto p-1">
+                          {availableStatuses.map(status => {
+                            const isChecked = reportFilters.selectedStatuses?.includes(status);
+                            return (
+                              <label
+                                key={status}
+                                className={`flex items-center gap-2 p-2 rounded-lg text-sm cursor-pointer transition-colors ${
+                                  isChecked ? 'bg-purple-50 text-purple-900 font-medium' : 'hover:bg-gray-50 text-gray-700'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    const curr = reportFilters.selectedStatuses || [];
+                                    const next = isChecked
+                                      ? curr.filter(s => s !== status)
+                                      : [...curr, status];
+                                    setReportFilters({ ...reportFilters, selectedStatuses: next });
+                                  }}
+                                  className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 cursor-pointer"
+                                />
+                                <span className="truncate flex-1">{status}</span>
+                                <span className={`w-2 h-2 rounded-full shrink-0 ${getStatusDotColor(status)}`}></span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {reportFilters.selectedStatuses && reportFilters.selectedStatuses.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {reportFilters.selectedStatuses.map(st => (
+                        <span key={st} className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-full text-xs font-medium">
+                          {st}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReportFilters({
+                                ...reportFilters,
+                                selectedStatuses: reportFilters.selectedStatuses.filter(s => s !== st)
+                              });
+                            }}
+                            className="hover:text-purple-900 ml-0.5"
+                          >
+                            <X size={12} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
 
                 <div>
                   <div className="flex items-center justify-between mb-2">

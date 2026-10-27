@@ -28,12 +28,14 @@ const getStudentDues = asyncHandler(async (req, res) => {
         search,
         kitId, // single kit filter (legacy)
         kitIds, // multiple kit filter
+        studentStatus, // single status
+        studentStatuses, // multiple statuses (comma-separated or array)
         limit = 50,
         page = 1,
         includeSummary = 'false', // to return total counts
     } = req.query;
 
-    console.log('getStudentDues params:', { course, branch, year, page, kitId, kitIds });
+    console.log('getStudentDues params:', { course, branch, year, page, kitId, kitIds, studentStatus, studentStatuses });
 
     // Handle kitIds (could be string or array)
     let selectedKitIds = [];
@@ -42,6 +44,16 @@ const getStudentDues = asyncHandler(async (req, res) => {
     } else if (kitId) {
         selectedKitIds = [kitId];
     }
+
+    // Handle student statuses
+    let selectedStatuses = [];
+    if (studentStatuses) {
+        selectedStatuses = Array.isArray(studentStatuses) ? studentStatuses : String(studentStatuses).split(',');
+    } else if (studentStatus) {
+        selectedStatuses = Array.isArray(studentStatus) ? studentStatus : String(studentStatus).split(',');
+    }
+    selectedStatuses = selectedStatuses.map(s => String(s).trim()).filter(Boolean);
+
 
     // OPTIMIZATION: Require Course Selection
     // Fetching ALL students from SQL is too heavy. We enforce selecting a course first.
@@ -164,11 +176,29 @@ const getStudentDues = asyncHandler(async (req, res) => {
             return student;
         }) : [];
 
-        // Filter out withdrawn/cancelled students
-        allStudents = allStudents.filter(student => {
-            const status = String(student.status || '').toLowerCase();
-            return !status.includes('cancel') && !status.includes('withdrawn') && !status.includes('discontinued');
-        });
+        // Student status filter logic
+        const hasStatusParam = Boolean(req.query.studentStatus || req.query.studentStatuses);
+        const isAllSelected = selectedStatuses.some(s => s.toLowerCase() === 'all');
+
+        if (hasStatusParam && !isAllSelected && selectedStatuses.length > 0) {
+            const statusSet = new Set(selectedStatuses.map(s => s.toLowerCase()));
+            allStudents = allStudents.filter(student => {
+                const s = String(student.status || '').trim().toLowerCase();
+                if (statusSet.has(s)) return true;
+                if (statusSet.has('course completed') && (s === 'course complated' || s === 'course completed')) return true;
+                if ((statusSet.has('rejoined') || statusSet.has('re-joined')) && (s === 'rejoined' || s === 're-joined')) return true;
+                if (statusSet.has('admission cancelled') && s.includes('cancel')) return true;
+                return false;
+            });
+        } else if (!hasStatusParam) {
+            // Default filter if no student status param is specified:
+            // Filter out withdrawn/cancelled students for backward compatibility
+            allStudents = allStudents.filter(student => {
+                const status = String(student.status || '').toLowerCase();
+                return !status.includes('cancel') && !status.includes('withdrawn') && !status.includes('discontinued');
+            });
+        }
+
 
         console.log(`[Dues] Debug: After filtering active students: ${allStudents.length}`);
 
@@ -332,6 +362,7 @@ const getStudentDues = asyncHandler(async (req, res) => {
                     semester: student.semester,
                     pin: student.pin,
                     phoneNumber: student.phoneNumber,
+                    status: student.status,
                 },
                 pendingItems,
                 totalDue: pendingCost,

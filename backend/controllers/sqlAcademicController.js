@@ -136,8 +136,65 @@ const getAcademicBatches = asyncHandler(async (req, res) => {
   }
 });
 
+/**
+ * Distinct student statuses from the students table.
+ */
+const getStudentStatuses = asyncHandler(async (req, res) => {
+  const pool = getMySqlPool();
+  if (!pool) {
+    res.status(500);
+    throw new Error('MySQL pool is not configured.');
+  }
+
+  const tableName = process.env.DB_STUDENTS_TABLE || DEFAULT_STUDENT_TABLE;
+
+  try {
+    const sql = `
+      SELECT DISTINCT TRIM(student_status) AS status
+      FROM \`${tableName}\`
+      WHERE student_status IS NOT NULL AND TRIM(student_status) != ''
+      ORDER BY status ASC
+    `;
+
+    const [rows] = await pool.query(sql);
+    const rawStatuses = (rows || [])
+      .map((row) => String(row.status || '').trim())
+      .filter(Boolean);
+
+    const statusMap = new Map();
+    rawStatuses.forEach(st => {
+      let canonical = st;
+      const lower = st.toLowerCase();
+      if (lower === 'course complated') canonical = 'Course Completed';
+      else if (lower === 're-joined') canonical = 'Rejoined';
+
+      if (!statusMap.has(canonical.toLowerCase())) {
+        statusMap.set(canonical.toLowerCase(), canonical);
+      }
+    });
+
+    const order = ['Regular', 'Course Completed', 'Detained', 'Long Absent', 'Rejoined', 'Discontinued', 'Admission Cancelled'];
+    const statuses = Array.from(statusMap.values()).sort((a, b) => {
+      const idxA = order.indexOf(a);
+      const idxB = order.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return a.localeCompare(b);
+    });
+
+    res.json(statuses);
+  } catch (error) {
+    console.error('[MySQL] Failed to fetch student statuses:', error);
+    res.status(500);
+    throw new Error('Failed to fetch student statuses from MySQL.');
+  }
+});
+
 module.exports = {
   getCourses,
   getBranches,
   getAcademicBatches,
+  getStudentStatuses,
 };
+
