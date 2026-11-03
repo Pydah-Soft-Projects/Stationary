@@ -303,135 +303,153 @@ const VendorManagement = ({ currentUser }) => {
         </div>
       </div>
 
-      {/* Vendors Grid */}
+      {/* Vendors List Table */}
       {loading && vendors.length === 0 ? (
         <div className="text-center py-12">
           <div className="w-8 h-8 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-500">Loading vendors...</p>
         </div>
       ) : filteredVendors.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredVendors.map((vendor) => (
-            <div 
-              key={vendor._id} 
-              className={`bg-white rounded-xl shadow-sm border-2 overflow-hidden transition-all duration-200 hover:shadow-md ${
-                vendor.isActive ? 'border-gray-200 hover:border-blue-300' : 'border-gray-300 opacity-75'
-              }`}
-            >
-              {/* Vendor Header */}
-              <div className="p-6 border-b border-gray-100 bg-gradient-to-r from-orange-50 to-white">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center mr-3 flex-shrink-0">
-                    <Building2 size={18} className="text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-bold text-gray-900 mb-1">
-                      {vendor.name}
-                    </h3>
-                    {vendor.contactPerson && (
-                      <p className="text-sm text-gray-600">
-                        Contact: {vendor.contactPerson}
-                      </p>
-                    )}
-                  </div>
-                  {!vendor.isActive && (
-                    <span className="px-2 py-1 bg-gray-200 text-gray-600 rounded-lg text-xs font-medium ml-2">
-                      Inactive
-                    </span>
-                  )}
-                </div>
-              </div>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="min-w-full table-auto">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr className="text-left text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <th className="px-6 py-4">Vendor</th>
+                  <th className="px-6 py-4">Contact</th>
+                  <th className="px-6 py-4">Address</th>
+                  <th className="px-6 py-4">GST / Payment</th>
+                  <th className="px-6 py-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-sm text-gray-700">
+                {filteredVendors.map((vendor) => (
+                  <tr 
+                    key={vendor._id} 
+                    className={`hover:bg-blue-50/40 transition-colors ${!vendor.isActive ? 'opacity-75 bg-gray-50/50' : ''}`}
+                  >
+                    {/* Vendor Name & Contact Person */}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg flex items-center justify-center flex-shrink-0 text-white shadow-sm">
+                          <Building2 size={16} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-gray-900">{vendor.name}</span>
+                            {!vendor.isActive && (
+                              <span className="px-2 py-0.5 bg-gray-200 text-gray-600 rounded text-[10px] font-medium">
+                                Inactive
+                              </span>
+                            )}
+                          </div>
+                          {vendor.contactPerson && (
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              Contact: <span className="font-medium text-gray-700">{vendor.contactPerson}</span>
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
 
-              {/* Vendor Info */}
-              <div className="p-6 space-y-3">
-                {vendor.email && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Mail size={16} className="text-gray-400" />
-                    <span className="text-gray-600 truncate">{vendor.email}</span>
-                  </div>
-                )}
-                {vendor.phone && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Phone size={16} className="text-gray-400" />
-                    <span className="text-gray-600">{vendor.phone}</span>
-                  </div>
-                )}
-                {vendor.address && (
-                  <div className="flex items-start gap-2 text-sm">
-                    <MapPin size={16} className="text-gray-400 mt-0.5" />
-                    <span className="text-gray-600 line-clamp-2">{vendor.address}</span>
-                  </div>
-                )}
-                {vendor.gstNumber && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <FileText size={16} className="text-gray-400" />
-                    <span className="text-gray-600">GST: {vendor.gstNumber}</span>
-                  </div>
-                )}
-                {vendor.paymentTerms && (
-                  <div className="pt-2 border-t border-gray-100">
-                    <p className="text-xs text-gray-500 mb-1">Payment Terms:</p>
-                    <p className="text-sm text-gray-700">{vendor.paymentTerms}</p>
-                  </div>
-                )}
-                {(vendor.bankDetails && (vendor.bankDetails.accountHolderName || vendor.bankDetails.bankName || vendor.bankDetails.accountNumber || vendor.bankDetails.upiId)) && (
-                  <div className="pt-2 border-t border-gray-100 space-y-1">
-                    <p className="text-xs text-gray-500 mb-1">Bank Details:</p>
-                    {vendor.bankDetails.accountHolderName && (
-                      <p className="text-xs text-gray-600">Account Holder: <span className="font-medium">{vendor.bankDetails.accountHolderName}</span></p>
-                    )}
-                    {vendor.bankDetails.bankName && (
-                      <p className="text-xs text-gray-600">
-                        Bank: <span className="font-medium">{vendor.bankDetails.bankName}{vendor.bankDetails.branchName ? `, ${vendor.bankDetails.branchName}` : ''}</span>
-                      </p>
-                    )}
-                    {vendor.bankDetails.accountNumber && (
-                      <p className="text-xs text-gray-600">Account No: <span className="font-medium">{vendor.bankDetails.accountNumber}</span></p>
-                    )}
-                    {vendor.bankDetails.ifscCode && (
-                      <p className="text-xs text-gray-600">IFSC: <span className="font-medium">{vendor.bankDetails.ifscCode}</span></p>
-                    )}
-                    {vendor.bankDetails.upiId && (
-                      <p className="text-xs text-gray-600">UPI ID: <span className="font-medium">{vendor.bankDetails.upiId}</span></p>
-                    )}
-                  </div>
-                )}
-              </div>
+                    {/* Contact (Phone & Email) */}
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-0.5">
+                        {vendor.phone ? (
+                          <div className="flex items-center gap-1.5 font-medium text-gray-800 text-xs">
+                            <Phone size={13} className="text-gray-400" />
+                            <span>{vendor.phone}</span>
+                          </div>
+                        ) : null}
+                        {vendor.email ? (
+                          <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                            <Mail size={13} className="text-gray-400" />
+                            <span className="truncate max-w-[180px]">{vendor.email}</span>
+                          </div>
+                        ) : null}
+                        {!vendor.phone && !vendor.email && (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </div>
+                    </td>
 
-              {/* Actions */}
-              <div className="p-6 pt-0 flex gap-2">
-                <button
-                  onClick={() => handleViewHistory(vendor)}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium text-sm"
-                >
-                  <History size={16} />
-                  History
-                </button>
-                {canEdit ? (
-                  <>
-                    <button
-                      onClick={() => handleEdit(vendor)}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium text-sm"
-                    >
-                      <Edit size={16} />
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(vendor._id, vendor.name)}
-                      className="px-4 py-2.5 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors"
-                      title="Delete"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </>
-                ) : (
-                  <span className="text-xs font-medium text-blue-600 bg-blue-100 px-3 py-2 rounded-lg">
-                    View Only
-                  </span>
-                )}
-              </div>
-            </div>
-          ))}
+                    {/* Address */}
+                    <td className="px-6 py-4 text-gray-600">
+                      {vendor.address ? (
+                        <div className="flex items-start gap-1.5 max-w-xs" title={vendor.address}>
+                          <MapPin size={13} className="text-gray-400 mt-0.5 flex-shrink-0" />
+                          <span className="line-clamp-2 text-xs leading-relaxed">{vendor.address}</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+
+                    {/* GST & Payment / Bank */}
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1 items-start">
+                        {vendor.gstNumber ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded bg-gray-100 text-gray-800 text-xs font-mono font-medium border border-gray-200">
+                            GST: {vendor.gstNumber}
+                          </span>
+                        ) : null}
+                        {vendor.paymentTerms ? (
+                          <span className="text-[11px] text-gray-500">
+                            Terms: <span className="text-gray-700 font-medium">{vendor.paymentTerms}</span>
+                          </span>
+                        ) : null}
+                        {vendor.bankDetails && (vendor.bankDetails.bankName || vendor.bankDetails.accountNumber) ? (
+                          <span className="text-[11px] text-gray-500">
+                            Bank: {vendor.bankDetails.bankName || 'A/C'} {vendor.bankDetails.accountNumber ? `(••${String(vendor.bankDetails.accountNumber).slice(-4)})` : ''}
+                          </span>
+                        ) : null}
+                        {!vendor.gstNumber && !vendor.paymentTerms && !(vendor.bankDetails && (vendor.bankDetails.bankName || vendor.bankDetails.accountNumber)) && (
+                          <span className="text-gray-400">—</span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleViewHistory(vendor)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-700 rounded-lg hover:bg-green-100 transition-colors font-medium text-xs shadow-sm"
+                          title="View History"
+                        >
+                          <History size={14} />
+                          History
+                        </button>
+                        {canEdit ? (
+                          <>
+                            <button
+                              onClick={() => handleEdit(vendor)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors font-medium text-xs shadow-sm"
+                              title="Edit Vendor"
+                            >
+                              <Edit size={14} />
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDelete(vendor._id, vendor.name)}
+                              className="p-1.5 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 transition-colors shadow-sm"
+                              title="Delete Vendor"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-xs font-medium text-blue-600 bg-blue-100 px-2.5 py-1 rounded-lg">
+                            View Only
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       ) : (
         <div className="bg-gray-50 rounded-xl border border-gray-200 p-12 text-center">

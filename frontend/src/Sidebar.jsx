@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, PlusCircle, Users, List, Settings, LogOut, ChevronLeft, ChevronRight, Menu, UserPlus, X, User, GraduationCap, Receipt, ClipboardList, ClipboardCheck, ArrowRightLeft, ShoppingCart, Briefcase, TrendingUp, ShieldCheck } from 'lucide-react';
+import { Home, PlusCircle, Users, List, Settings, LogOut, ChevronLeft, ChevronRight, Menu, UserPlus, X, User, GraduationCap, Receipt, ClipboardList, ClipboardCheck, ArrowRightLeft, ShoppingCart, Briefcase, TrendingUp, ShieldCheck, ChevronDown, Package, Plus, Building2 } from 'lucide-react';
 import { hasViewAccess } from './utils/permissions';
 import { apiUrl } from './utils/api';
 
@@ -78,6 +78,34 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
   // Sub admin check
   const isSubAdmin = !isSuperAdmin && currentUser?.role;
   const subAdminPermissions = currentUser?.permissions || [];
+
+  const isStockRoute = location.pathname.startsWith('/manage-stock');
+  const [stockDropdownOpen, setStockDropdownOpen] = useState(isStockRoute);
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/manage-stock')) {
+      setStockDropdownOpen(true);
+    }
+  }, [location.pathname]);
+
+  const searchParams = new URLSearchParams(location.search);
+  const currentTab = searchParams.get('tab') || 'products';
+
+  const hasLegacyStockPermission = subAdminPermissions.some(p => {
+    if (typeof p !== 'string') return false;
+    return p === 'manage-stock' || p.startsWith('manage-stock:');
+  });
+
+  const canAccessProducts = isSuperAdmin || hasLegacyStockPermission || hasViewAccess(subAdminPermissions, 'stock-products');
+  const canAccessStock = isSuperAdmin || hasLegacyStockPermission || hasViewAccess(subAdminPermissions, 'stock-add');
+  const canAccessEntries = isSuperAdmin || hasLegacyStockPermission || hasViewAccess(subAdminPermissions, 'stock-entries');
+  const canAccessVendors = isSuperAdmin || hasLegacyStockPermission || hasViewAccess(subAdminPermissions, 'stock-vendors');
+
+  const stockSubItems = [
+    { tabId: 'stock', label: 'Add Stock', icon: Plus, canAccess: canAccessStock },
+    { tabId: 'entries', label: 'Stock Entries', icon: List, canAccess: canAccessEntries },
+    { tabId: 'vendors', label: 'Vendor Management', icon: Building2, canAccess: canAccessVendors },
+  ].filter(item => item.canAccess);
 
   // Map sidebar items with permission keys
   const allMenuItems = [
@@ -184,6 +212,89 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
             {menuItems.map((item) => {
               const IconComponent = item.icon;
               const isActive = item.exact ? location.pathname === item.path : location.pathname.startsWith(item.path);
+
+              if (item.path === '/manage-stock') {
+                const isParentActive = location.pathname.startsWith('/manage-stock');
+                return (
+                  <li key={item.path} className="flex flex-col">
+                    <div className="flex items-center relative">
+                      <NavLink
+                        to="/manage-stock"
+                        onClick={() => {
+                          if (!sidebarOpen) {
+                            setSidebarOpen(true);
+                            setStockDropdownOpen(true);
+                          } else {
+                            setStockDropdownOpen(prev => (isParentActive ? !prev : true));
+                          }
+                        }}
+                        className={`
+                          flex-1 flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-xl transition-all duration-200 relative group
+                          ${isParentActive
+                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
+                            : 'text-slate-300 hover:bg-slate-600 hover:text-white hover:translate-x-1'
+                          }
+                          ${!sidebarOpen ? 'justify-center px-2' : ''}
+                        `}
+                        title={!sidebarOpen ? item.label : ''}
+                      >
+                        <IconComponent size={20} className="flex-shrink-0" />
+                        {sidebarOpen && <span className="truncate flex-1">{item.label}</span>}
+                        {sidebarOpen && stockSubItems.length > 0 && (
+                          <span
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setStockDropdownOpen(prev => !prev);
+                            }}
+                            className="p-1 hover:bg-white/20 rounded transition-colors ml-1"
+                            title={stockDropdownOpen ? 'Collapse menu' : 'Expand menu'}
+                          >
+                            <ChevronDown
+                              size={16}
+                              className={`transition-transform duration-200 ${stockDropdownOpen ? 'rotate-180' : ''}`}
+                            />
+                          </span>
+                        )}
+                        {isParentActive && sidebarOpen && (
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-400 rounded-r-full"></div>
+                        )}
+                      </NavLink>
+                    </div>
+
+                    {/* Submenu Dropdown under Academic Stock */}
+                    {sidebarOpen && stockDropdownOpen && stockSubItems.length > 0 && (
+                      <ul className="mt-1.5 ml-4 pl-3 border-l-2 border-slate-700 space-y-1 py-1">
+                        {stockSubItems.map((subItem) => {
+                          const isSubActive = isParentActive && currentTab === subItem.tabId;
+                          const SubIcon = subItem.icon;
+
+                          return (
+                            <li key={subItem.tabId}>
+                              <NavLink
+                                to={`/manage-stock?tab=${subItem.tabId}`}
+                                onClick={() => {
+                                  if (isMobileProp) setSidebarOpen(false);
+                                }}
+                                className={`
+                                  flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-all duration-150
+                                  ${isSubActive
+                                    ? 'bg-blue-600 text-white shadow-sm font-semibold'
+                                    : 'text-slate-300 hover:bg-slate-700/80 hover:text-white'
+                                  }
+                                `}
+                              >
+                                <SubIcon size={14} className={`flex-shrink-0 ${isSubActive ? 'text-white' : 'text-slate-400'}`} />
+                                <span className="truncate">{subItem.label}</span>
+                              </NavLink>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </li>
+                );
+              }
 
               return (
                 <li key={item.path}>

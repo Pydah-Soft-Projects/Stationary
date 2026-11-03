@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Package, Plus, Building2, Archive, List, Lock, Filter } from 'lucide-react';
 import AddProduct from './stock/AddProduct';
 import AddStock from './stock/AddStock';
@@ -54,11 +55,42 @@ const ManageStock = ({ itemCategories, addItemCategory, setItemCategories, curre
   // Filter tabs based on permissions
   const tabs = useMemo(() => allTabs.filter(tab => tab.canAccess), [allTabs]);
 
-  // Set initial active tab to first available tab
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlTab = searchParams.get('tab');
+
+  // Set initial active tab to URL tab if valid, or first available tab
   const [activeTab, setActiveTab] = useState(() => {
+    if (urlTab && allTabs.some(tab => tab.id === urlTab && tab.canAccess)) {
+      return urlTab;
+    }
     const firstAvailableTab = allTabs.find(tab => tab.canAccess);
     return firstAvailableTab ? firstAvailableTab.id : null;
   });
+
+  // Sync with URL query parameter when it changes (e.g. from sidebar navigation)
+  useEffect(() => {
+    if (urlTab && allTabs.some(tab => tab.id === urlTab && tab.canAccess)) {
+      setActiveTab(urlTab);
+    }
+  }, [urlTab, allTabs]);
+
+  const handleTabChange = (tabId) => {
+    setActiveTab(tabId);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', tabId);
+      return next;
+    });
+  };
+
+  const [externalAddTrigger, setExternalAddTrigger] = useState(0);
+
+  const handleAddProductClick = () => {
+    if (activeTab !== 'products') {
+      handleTabChange('products');
+    }
+    setExternalAddTrigger(prev => prev + 1);
+  };
 
   // Update active tab if current tab becomes unavailable
   useEffect(() => {
@@ -76,66 +108,65 @@ const ManageStock = ({ itemCategories, addItemCategory, setItemCategories, curre
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="mx-auto">
-        {/* Header Section with Tabs */}
-        <div className="mb-6">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                <Archive className="w-7 h-7 text-white" />
+        {/* Header Section for Academic Stock (Products) */}
+        {activeTab === 'products' ? (
+          <div className="mb-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              {/* Title & Icon */}
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                  <Archive className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-semibold text-gray-900">Academic Stock</h1>
+                  <p className="text-gray-600 mt-1 text-sm">Manage products, stock entries, and vendors</p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl font-semibold text-gray-900">Manage Stock</h1>
-                <p className="text-gray-600 mt-1 text-sm">Manage products, stock entries, and vendors</p>
+
+              {/* Right Side Actions */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Admin Context Selector */}
+                {isSuperAdmin && (
+                  <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-200 shadow-sm">
+                    <span className="text-xs font-medium text-gray-600 flex items-center gap-1.5 whitespace-nowrap">
+                      <Filter size={14} className="text-gray-400" />
+                      <span>View Stock For:</span>
+                    </span>
+                    <select
+                      className="text-xs font-semibold text-gray-800 bg-transparent border-0 outline-none cursor-pointer focus:ring-0 pr-2"
+                      value={viewContext}
+                      onChange={(e) => setViewContext(e.target.value)}
+                    >
+                      <option value="central">Central Warehouse</option>
+                      {colleges.map(c => (
+                        <option key={c._id} value={c._id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Add Product Button */}
+                {canAccessProducts && (
+                  <button
+                    onClick={handleAddProductClick}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-md hover:shadow-lg text-sm font-semibold cursor-pointer whitespace-nowrap"
+                  >
+                    <Plus size={18} />
+                    <span>Add Product</span>
+                  </button>
+                )}
               </div>
             </div>
-
-            {tabs.length > 0 && (
-              <div className="flex flex-wrap gap-2 w-full md:w-auto">
-                {allTabs.map((tab) => {
-                  const IconComponent = tab.icon;
-                  const isActive = activeTab === tab.id;
-                  const hasAccess = tab.canAccess;
-
-                  if (!hasAccess) {
-                    return (
-                      <button
-                        key={tab.id}
-                        disabled
-                        className="flex-1 min-w-[140px] md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all opacity-60 cursor-not-allowed bg-gray-100 text-gray-400"
-                        title="You do not have permission to access this tab"
-                      >
-                        <Lock size={16} />
-                        <span>{tab.label}</span>
-                      </button>
-                    );
-                  }
-
-                  return (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`flex-1 min-w-[140px] md:flex-none flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isActive
-                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md'
-                        : 'text-gray-600 hover:bg-gray-100'
-                        }`}
-                    >
-                      <IconComponent size={16} />
-                      <span>{tab.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
           </div>
-
-          {/* Admin Context Selector */}
-          {isSuperAdmin && (activeTab === 'products' || activeTab === 'entries') && (
-            <div className="mt-4 flex items-center gap-2 justify-end">
-              <span className="text-sm font-medium text-gray-700 flex items-center gap-1">
-                <Filter size={14} className="text-gray-500" /> View Stock For:
+        ) : activeTab === 'entries' && isSuperAdmin ? (
+          <div className="mb-2 flex items-center justify-end px-6">
+            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-200 shadow-sm">
+              <span className="text-xs font-medium text-gray-600 flex items-center gap-1.5 whitespace-nowrap">
+                <Filter size={14} className="text-gray-400" />
+                <span>View Stock For:</span>
               </span>
               <select
-                className="text-sm border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                className="text-xs font-semibold text-gray-800 bg-transparent border-0 outline-none cursor-pointer focus:ring-0 pr-2"
                 value={viewContext}
                 onChange={(e) => setViewContext(e.target.value)}
               >
@@ -145,8 +176,8 @@ const ManageStock = ({ itemCategories, addItemCategory, setItemCategories, curre
                 ))}
               </select>
             </div>
-          )}
-        </div>
+          </div>
+        ) : null}
 
         {tabs.length === 0 && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
@@ -164,7 +195,7 @@ const ManageStock = ({ itemCategories, addItemCategory, setItemCategories, curre
 
         {/* Tab Content */}
         {tabs.length > 0 && activeTab && (
-          <div className="mt-4">
+          <div className={activeTab === 'products' ? "mt-4" : ""}>
             {activeTab === 'products' && canAccessProducts && (
               <AddProduct
                 itemCategories={itemCategories}
@@ -175,6 +206,7 @@ const ManageStock = ({ itemCategories, addItemCategory, setItemCategories, curre
                 setProducts={setProducts}
                 currentUser={currentUser}
                 viewContext={viewContext} // Pass the context
+                externalAddTrigger={externalAddTrigger}
               />
             )}
             {activeTab === 'stock' && canAccessStock && (

@@ -5,7 +5,7 @@ import { hasFullAccess } from '../../utils/permissions';
 import { formatAcademicYearsDisplay } from '../../utils/productApplicability';
 import { getAcademicYearOptions, getDefaultAcademicYear } from '../../utils/academicYears';
 
-const AddProduct = ({ itemCategories, addItemCategory, setItemCategories, currentCourse, products = [], setProducts, currentUser, viewContext = 'central' }) => {
+const AddProduct = ({ itemCategories, addItemCategory, setItemCategories, currentCourse, products = [], setProducts, currentUser, viewContext = 'central', externalAddTrigger }) => {
   // Check access level
   const isSuperAdmin = currentUser?.role === 'Administrator';
   const permissions = currentUser?.permissions || [];
@@ -28,6 +28,16 @@ const AddProduct = ({ itemCategories, addItemCategory, setItemCategories, curren
   const [searchQuery, setSearchQuery] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [priceAdjustVal, setPriceAdjustVal] = useState('');
+
+  // Handle external trigger from top-right header button in ManageStock
+  useEffect(() => {
+    if (externalAddTrigger) {
+      setShowAddProduct(true);
+      setShowProductDetail(false);
+      setSelectedProduct(null);
+      setIsEditing(false);
+    }
+  }, [externalAddTrigger]);
 
   const handleQuickIncrease = () => {
     const adjustAmt = Math.round(Number(priceAdjustVal));

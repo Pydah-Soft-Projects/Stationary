@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, GraduationCap, Package, ShoppingCart, DollarSign,
@@ -42,6 +42,19 @@ const Dashboard = () => {
   const [colleges, setColleges] = useState([]);
   const [selectedCollege, setSelectedCollege] = useState(''); // '' means Central/Global view
 
+  const getTodayString = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const [abstractStartDate, setAbstractStartDate] = useState(getTodayString());
+  const [abstractEndDate, setAbstractEndDate] = useState(getTodayString());
+  const [abstractLoading, setAbstractLoading] = useState(false);
+  const isFirstRender = useRef(true);
+
   // Load initial view preference for SubAdmins
   useEffect(() => {
     if (!isSuperAdmin && currentUser?.assignedCollege) {
@@ -65,38 +78,57 @@ const Dashboard = () => {
     fetchColleges();
   }, []);
 
+  const fetchStats = async (college = selectedCollege, start = abstractStartDate, end = abstractEndDate) => {
+    try {
+      const params = new URLSearchParams();
+      if (college) params.append('collegeId', college);
+      if (start) params.append('startDate', start);
+      if (end) params.append('endDate', end);
+      params.append('t', Date.now().toString());
+
+      const res = await fetch(apiUrl(`/api/dashboard/stats?${params.toString()}`));
+      if (!res.ok) throw new Error('Failed to fetch dashboard stats');
+
+      const data = await res.json();
+      setStats(data);
+      if (data.zeroStockDuesData) setZeroStockDuesData(data.zeroStockDuesData);
+      if (data.recentTransactions) setRecentTransactions(data.recentTransactions);
+      return data;
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
 
       try {
-        const statsUrl = selectedCollege
-          ? apiUrl(`/api/dashboard/stats?collegeId=${selectedCollege}&t=${Date.now()}`)
-          : apiUrl(`/api/dashboard/stats?t=${Date.now()}`);
-
-        const res = await fetch(statsUrl);
-        if (!res.ok) throw new Error('Failed to fetch dashboard stats');
-
-        const data = await res.json();
-
-        setStats(data);
-        if (data.zeroStockDuesData) setZeroStockDuesData(data.zeroStockDuesData);
-        if (data.recentTransactions) setRecentTransactions(data.recentTransactions);
+        await fetchStats(selectedCollege, abstractStartDate, abstractEndDate);
 
         // Fetch products and vendors (small lists)
-        const [productsRes, vendorsRes] = await Promise.all([
-          fetch(apiUrl(`/api/products?t=${Date.now()}`)),
-          fetch(apiUrl(`/api/vendors?t=${Date.now()}`))
-        ]);
+        let productsData = [];
+        if (selectedCollege) {
+          const collegeStockRes = await fetch(apiUrl(`/api/stock-transfers/colleges/${selectedCollege}/stock?t=${Date.now()}`));
+          if (collegeStockRes.ok) {
+            const collegeJson = await collegeStockRes.json();
+            productsData = (collegeJson.stock || [])
+              .filter(item => item && item.product)
+              .map(item => ({
+                ...item.product,
+                stock: item.quantity || 0,
+              }));
+          }
+        } else {
+          const productsRes = await fetch(apiUrl(`/api/products?t=${Date.now()}`));
+          if (productsRes.ok) {
+            productsData = await productsRes.json();
+          }
+        }
+        setProducts(Array.isArray(productsData) ? productsData : []);
 
-        if (productsRes.ok) setProducts(await productsRes.json());
+        const vendorsRes = await fetch(apiUrl(`/api/vendors?t=${Date.now()}`));
         if (vendorsRes.ok) setVendors(await vendorsRes.json());
-
-
-        // Cleanup Part 1
-
-
-
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -106,6 +138,20 @@ const Dashboard = () => {
 
     fetchData();
   }, [selectedCollege, colleges]);
+
+  // Handle date range changes for the Daily Transaction Abstract card
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    const updateAbstract = async () => {
+      setAbstractLoading(true);
+      await fetchStats(selectedCollege, abstractStartDate, abstractEndDate);
+      setAbstractLoading(false);
+    };
+    updateAbstract();
+  }, [abstractStartDate, abstractEndDate]);
 
   const formatCurrency = (amount) => {
     return `₹${Number(amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -139,6 +185,11 @@ const Dashboard = () => {
     stockValue: (product?.stock || 0) * (product?.price || 0),
   })).sort((a, b) => (b?.stockValue || 0) - (a?.stockValue || 0));
 
+  const totalCalculatedStockValue = productsWithValue.reduce((sum, p) => sum + (p.stockValue || 0), 0);
+  const displayStockValue = (typeof stats?.totalStockValue === 'number' && stats.totalStockValue > 0)
+    ? stats.totalStockValue
+    : totalCalculatedStockValue;
+
   // Filter zero stock dues
   const filteredZeroStockDues = safeZeroStockDues.filter(data => 
     data?.student?.name?.toLowerCase().includes((zeroStockSearch || '').toLowerCase()) ||
@@ -147,13 +198,13 @@ const Dashboard = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 p-4 sm:p-5">
       <div className="mx-auto">
         {/* Header */}
-        <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="mb-5 flex flex-col md:flex-row md:items-end justify-between gap-3">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-            <p className="text-gray-600">Welcome to Stationery Management System</p>
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">Dashboard</h1>
+            <p className="text-sm text-gray-600">Welcome to Stationery Management System</p>
           </div>
 
           {isSuperAdmin && (
@@ -188,172 +239,226 @@ const Dashboard = () => {
         </div>
 
         {/* Key Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           {/* Total Revenue */}
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                <DollarSign size={24} />
+          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 sm:p-5 text-white shadow-md hover:shadow-lg transition-shadow">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center">
+                <DollarSign size={18} />
               </div>
-              <TrendingUp size={20} className="opacity-80" />
+              <TrendingUp size={16} className="opacity-80" />
             </div>
-            <div className="text-3xl font-bold mb-1">
+            <div className="text-2xl font-bold mb-0.5">
               {loading ? (
-                <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
                 formatCurrency(stats.totalRevenue)
               )}
             </div>
-            <div className="text-green-100 text-sm font-medium">Total Revenue (Paid)</div>
+            <div className="text-green-100 text-xs font-medium">Total Revenue (Paid)</div>
           </div>
 
           {/* Pending Revenue */}
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                <CreditCard size={24} />
+          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-4 sm:p-5 text-white shadow-md hover:shadow-lg transition-shadow">
+            <div className="flex items-center justify-between mb-2">
+              <div className="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center">
+                <CreditCard size={18} />
               </div>
-              <TrendingDown size={20} className="opacity-80" />
+              <TrendingDown size={16} className="opacity-80" />
             </div>
-            <div className="text-3xl font-bold mb-1">
+            <div className="text-2xl font-bold mb-0.5">
               {loading ? (
-                <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
                 formatCurrency(stats.pendingRevenue)
               )}
             </div>
-            <div className="text-orange-100 text-sm font-medium">Pending Payments</div>
+            <div className="text-orange-100 text-xs font-medium">Pending Payments</div>
           </div>
         </div>
 
         {/* Secondary Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-4">
           {/* Total Products */}
           <div
             onClick={() => setActiveModal('products')}
-            className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
+            className="bg-white rounded-xl p-3.5 sm:p-4 shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
           >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Package size={24} className="text-blue-600" />
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Package size={18} className="text-blue-600" />
               </div>
-              <div className="flex-1">
-                <div className="text-2xl font-bold text-gray-900">
+              <div className="flex-1 min-w-0">
+                <div className="text-lg font-bold text-gray-900 truncate">
                   {loading ? '...' : stats.totalProducts}
                 </div>
-                <div className="text-sm text-gray-600">Total Products</div>
+                <div className="text-xs text-gray-500">Total Products</div>
               </div>
-              <ArrowRight size={20} className="text-gray-400" />
+              <ArrowRight size={16} className="text-gray-400 flex-shrink-0" />
             </div>
           </div>
 
           {/* Stock Value */}
           <div
             onClick={() => setActiveModal('stockValue')}
-            className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md hover:border-green-300 transition-all cursor-pointer"
+            className="bg-white rounded-xl p-3.5 sm:p-4 shadow-sm border border-gray-200 hover:shadow-md hover:border-green-300 transition-all cursor-pointer"
           >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                <BarChart3 size={24} className="text-green-600" />
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <BarChart3 size={18} className="text-green-600" />
               </div>
-              <div className="flex-1">
-                <div className="text-2xl font-bold text-gray-900">
-                  {loading ? '...' : formatCurrency(stats.totalStockValue)}
+              <div className="flex-1 min-w-0">
+                <div className="text-lg font-bold text-gray-900 truncate">
+                  {loading ? '...' : formatCurrency(displayStockValue)}
                 </div>
-                <div className="text-sm text-gray-600">Stock Value</div>
+                <div className="text-xs text-gray-500">Stock Value</div>
               </div>
-              <ArrowRight size={20} className="text-gray-400" />
+              <ArrowRight size={16} className="text-gray-400 flex-shrink-0" />
             </div>
           </div>
 
           {/* Low Stock Alert */}
           <div
             onClick={() => setActiveModal('lowStock')}
-            className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md hover:border-red-300 transition-all cursor-pointer"
+            className="bg-white rounded-xl p-3.5 sm:p-4 shadow-sm border border-gray-200 hover:shadow-md hover:border-red-300 transition-all cursor-pointer"
           >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                <AlertCircle size={24} className="text-red-600" />
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <AlertCircle size={18} className="text-red-600" />
               </div>
-              <div className="flex-1">
-                <div className="text-2xl font-bold text-gray-900">
+              <div className="flex-1 min-w-0">
+                <div className="text-lg font-bold text-gray-900 truncate">
                   {loading ? '...' : stats.lowStockItems}
                 </div>
-                <div className="text-sm text-gray-600">Low Stock Items</div>
+                <div className="text-xs text-gray-500">Low Stock Items</div>
               </div>
-              <ArrowRight size={20} className="text-gray-400" />
+              <ArrowRight size={16} className="text-gray-400 flex-shrink-0" />
             </div>
           </div>
 
           {/* Zero-Stock Dues Card */}
           <div
             onClick={() => setActiveModal('zeroStock')}
-            className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md hover:border-orange-300 transition-all cursor-pointer"
+            className="bg-white rounded-xl p-3.5 sm:p-4 shadow-sm border border-gray-200 hover:shadow-md hover:border-orange-300 transition-all cursor-pointer"
           >
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                <PackageSearch size={24} className="text-orange-600" />
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <PackageSearch size={18} className="text-orange-600" />
               </div>
-              <div className="flex-1">
-                <div className="text-2xl font-bold text-gray-900">
+              <div className="flex-1 min-w-0">
+                <div className="text-lg font-bold text-gray-900 truncate">
                   {loading ? '...' : stats.zeroStockDuesStudents}
                 </div>
-                <div className="text-sm text-gray-600">Zero-Stock Dues</div>
+                <div className="text-xs text-gray-500">Zero-Stock Dues</div>
               </div>
-              <ArrowRight size={20} className="text-gray-400" />
+              <ArrowRight size={16} className="text-gray-400 flex-shrink-0" />
             </div>
           </div>
         </div>
 
         {/* Today's Performance & Course Overview */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          {/* Today's Performance */}
-          <div className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl p-6 shadow-lg hover:shadow-xl transition-shadow">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                  <Calendar size={20} className="text-white" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          {/* Daily Transaction Abstract */}
+          <div className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl p-4 sm:p-5 shadow-md hover:shadow-lg transition-shadow">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3.5 gap-2.5">
+              <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                  <Calendar size={16} className="text-white" />
                 </div>
-                Today's Performance
+                <span>Daily Transaction Abstract</span>
               </h3>
-            </div>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-white/20 rounded-lg backdrop-blur-sm">
-                <div>
-                  <p className="text-sm text-teal-100 mb-1">Transactions</p>
-                  <p className="text-2xl font-bold text-white">{stats.todayTransactions}</p>
-                </div>
-                <div className="w-12 h-12 bg-white/30 rounded-lg flex items-center justify-center">
-                  <ShoppingCart size={24} className="text-white" />
+
+              {/* Date Range Filter */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5 bg-black/20 px-2 py-1 rounded-lg backdrop-blur-sm border border-white/20">
+                  <label className="text-[10px] text-teal-100 font-medium">From:</label>
+                  <input
+                    type="date"
+                    value={abstractStartDate}
+                    onChange={(e) => setAbstractStartDate(e.target.value)}
+                    className="bg-white/95 text-gray-800 text-[11px] px-1.5 py-0.5 rounded outline-none focus:ring-2 focus:ring-teal-300 font-medium cursor-pointer shadow-sm"
+                  />
+                  <label className="text-[10px] text-teal-100 font-medium ml-1">To:</label>
+                  <input
+                    type="date"
+                    value={abstractEndDate}
+                    min={abstractStartDate}
+                    onChange={(e) => setAbstractEndDate(e.target.value)}
+                    className="bg-white/95 text-gray-800 text-[11px] px-1.5 py-0.5 rounded outline-none focus:ring-2 focus:ring-teal-300 font-medium cursor-pointer shadow-sm"
+                  />
+                  {(abstractStartDate !== getTodayString() || abstractEndDate !== getTodayString()) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAbstractStartDate(getTodayString());
+                        setAbstractEndDate(getTodayString());
+                      }}
+                      className="ml-1 text-[10px] bg-white/20 hover:bg-white/30 text-white px-1.5 py-0.5 rounded font-medium transition-colors"
+                      title="Reset to Today"
+                    >
+                      Today
+                    </button>
+                  )}
                 </div>
               </div>
-              <div className="p-4 bg-white/20 rounded-lg backdrop-blur-sm">
-                <div className="flex items-center justify-between mb-3">
+            </div>
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between p-3 bg-white/20 rounded-lg backdrop-blur-sm">
+                <div>
+                  <p className="text-xs text-teal-100 mb-0.5">Transactions</p>
+                  <p className="text-xl font-bold text-white">
+                    {abstractLoading ? (
+                      <span className="text-base opacity-80 animate-pulse">...</span>
+                    ) : (
+                      stats.todayTransactions
+                    )}
+                  </p>
+                </div>
+                <div className="w-9 h-9 bg-white/30 rounded-lg flex items-center justify-center">
+                  <ShoppingCart size={18} className="text-white" />
+                </div>
+              </div>
+              <div className="p-3 bg-white/20 rounded-lg backdrop-blur-sm">
+                <div className="flex items-center justify-between mb-2">
                   <div>
-                    <p className="text-sm text-teal-100 mb-1">Today's Revenue</p>
-                    <p className="text-2xl font-bold text-white">{formatCurrency(stats.todayRevenue)}</p>
+                    <p className="text-xs text-teal-100 mb-0.5">
+                      {abstractStartDate === abstractEndDate && abstractStartDate === getTodayString()
+                        ? "Today's Revenue"
+                        : "Revenue"}
+                    </p>
+                    <p className="text-xl font-bold text-white">
+                      {abstractLoading ? (
+                        <span className="text-base opacity-80 animate-pulse">...</span>
+                      ) : (
+                        formatCurrency(stats.todayRevenue)
+                      )}
+                    </p>
                   </div>
-                  <div className="w-12 h-12 bg-white/30 rounded-lg flex items-center justify-center">
-                    <DollarSign size={24} className="text-white" />
+                  <div className="w-9 h-9 bg-white/30 rounded-lg flex items-center justify-center">
+                    <DollarSign size={18} className="text-white" />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-white/10">
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10">
                   <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-white/20 rounded-md">
-                      <Wallet size={14} className="text-white" />
+                    <div className="p-1 bg-white/20 rounded-md">
+                      <Wallet size={12} className="text-white" />
                     </div>
                     <div>
-                      <p className="text-[10px] text-teal-100 uppercase font-semibold">Cash</p>
-                      <p className="text-sm font-bold text-white">{formatCurrency(stats.todayCashRevenue)}</p>
+                      <p className="text-[9px] text-teal-100 uppercase font-semibold">Cash</p>
+                      <p className="text-xs font-bold text-white">
+                        {abstractLoading ? '...' : formatCurrency(stats.todayCashRevenue)}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-white/20 rounded-md">
-                      <CreditCard size={14} className="text-white" />
+                    <div className="p-1 bg-white/20 rounded-md">
+                      <CreditCard size={12} className="text-white" />
                     </div>
                     <div>
-                      <p className="text-[10px] text-teal-100 uppercase font-semibold">Online</p>
-                      <p className="text-sm font-bold text-white">{formatCurrency(stats.todayOnlineRevenue)}</p>
+                      <p className="text-[9px] text-teal-100 uppercase font-semibold">Online</p>
+                      <p className="text-xs font-bold text-white">
+                        {abstractLoading ? '...' : formatCurrency(stats.todayOnlineRevenue)}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -362,55 +467,55 @@ const Dashboard = () => {
           </div>
 
           {/* Student Overview */}
-          <div className={`bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-6 shadow-lg transition-shadow relative ${!hasStudentDashboardPermission ? 'opacity-60' : 'hover:shadow-xl'}`}>
+          <div className={`bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-4 sm:p-5 shadow-md transition-shadow relative ${!hasStudentDashboardPermission ? 'opacity-60' : 'hover:shadow-lg'}`}>
             {!hasStudentDashboardPermission && (
               <div className="absolute inset-0 bg-gray-900/30 rounded-xl flex items-center justify-center z-10 backdrop-blur-[2px]">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-                    <Lock size={24} className="text-white" />
+                <div className="flex flex-col items-center gap-1.5">
+                  <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">
+                    <Lock size={18} className="text-white" />
                   </div>
-                  <p className="text-white font-semibold text-sm">Locked</p>
-                  <p className="text-indigo-100 text-xs">No access permission</p>
+                  <p className="text-white font-semibold text-xs">Locked</p>
+                  <p className="text-indigo-100 text-[11px]">No access permission</p>
                 </div>
               </div>
             )}
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                  <GraduationCap size={20} className="text-white" />
+            <div className="flex items-center justify-between mb-3.5">
+              <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                  <GraduationCap size={16} className="text-white" />
                 </div>
                 Student Overview
                 {!hasStudentDashboardPermission && (
-                  <Lock size={16} className="text-white/80" />
+                  <Lock size={14} className="text-white/80" />
                 )}
               </h3>
               {hasStudentDashboardPermission && (
                 <button
                   onClick={() => navigate('/students-dashboard')}
-                  className="text-sm text-white hover:text-indigo-100 font-medium flex items-center gap-1 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors"
+                  className="text-xs text-white hover:text-indigo-100 font-medium flex items-center gap-1 bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded-lg transition-colors"
                 >
                   View Student Dashboard
-                  <ArrowRight size={14} />
+                  <ArrowRight size={12} />
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-1 gap-3">
-              <div className="flex items-center justify-between p-4 bg-white/20 rounded-lg backdrop-blur-sm">
+            <div className="grid grid-cols-1 gap-2">
+              <div className="flex items-center justify-between p-2.5 px-3.5 bg-white/20 rounded-lg backdrop-blur-sm">
                 <div>
-                  <p className="text-sm text-indigo-100">Total Students</p>
-                  <p className="text-2xl font-bold text-white">{stats.totalStudents.toLocaleString()}</p>
+                  <p className="text-xs text-indigo-100">Total Students</p>
+                  <p className="text-lg font-bold text-white">{stats.totalStudents.toLocaleString()}</p>
                 </div>
               </div>
-              <div className="flex items-center justify-between p-4 bg-white/20 rounded-lg backdrop-blur-sm">
+              <div className="flex items-center justify-between p-2.5 px-3.5 bg-white/20 rounded-lg backdrop-blur-sm">
                 <div>
-                  <p className="text-sm text-indigo-100">Paid Students</p>
-                  <p className="text-2xl font-bold text-white">{stats.paidStudents.toLocaleString()}</p>
+                  <p className="text-xs text-indigo-100">Paid Students</p>
+                  <p className="text-lg font-bold text-white">{stats.paidStudents.toLocaleString()}</p>
                 </div>
               </div>
-              <div className="flex items-center justify-between p-4 bg-white/20 rounded-lg backdrop-blur-sm">
+              <div className="flex items-center justify-between p-2.5 px-3.5 bg-white/20 rounded-lg backdrop-blur-sm">
                 <div>
-                  <p className="text-sm text-indigo-100">Pending Students</p>
-                  <p className="text-2xl font-bold text-white">{stats.unpaidStudents.toLocaleString()}</p>
+                  <p className="text-xs text-indigo-100">Pending Students</p>
+                  <p className="text-lg font-bold text-white">{stats.unpaidStudents.toLocaleString()}</p>
                 </div>
               </div>
             </div>
@@ -418,46 +523,46 @@ const Dashboard = () => {
         </div>
 
         {/* Recent Transactions & Quick Actions */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Recent Transactions */}
-          <div className="bg-gradient-to-br from-purple-500 to-violet-600 rounded-xl shadow-lg hover:shadow-xl transition-shadow">
-            <div className="p-6 border-b border-white/20 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                  <Activity size={20} className="text-white" />
+          <div className="bg-gradient-to-br from-purple-500 to-violet-600 rounded-xl shadow-md hover:shadow-lg transition-shadow">
+            <div className="p-3.5 px-4 border-b border-white/20 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                  <Activity size={16} className="text-white" />
                 </div>
                 Recent Transactions
               </h3>
               <button
                 onClick={() => navigate('/transactions')}
-                className="text-sm text-white hover:text-purple-100 font-medium flex items-center gap-1 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors"
+                className="text-xs text-white hover:text-purple-100 font-medium flex items-center gap-1 bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded-lg transition-colors"
               >
                 View All
-                <ArrowRight size={14} />
+                <ArrowRight size={12} />
               </button>
             </div>
-            <div className="p-6">
+            <div className="p-4">
               {loading ? (
-                <div className="text-center py-8">
-                  <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto"></div>
+                <div className="text-center py-6">
+                  <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin mx-auto"></div>
                 </div>
               ) : recentTransactions.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {recentTransactions.map((transaction) => (
                     <div
                       key={transaction._id}
-                      className="flex items-center justify-between p-4 bg-white/20 rounded-lg hover:bg-white/30 transition-colors cursor-pointer backdrop-blur-sm"
+                      className="flex items-center justify-between p-2.5 px-3 bg-white/20 rounded-lg hover:bg-white/30 transition-colors cursor-pointer backdrop-blur-sm"
                       onClick={() => navigate('/transactions')}
                     >
-                      <div className="flex-1">
-                        <p className="font-semibold text-white">{transaction.student?.name || 'N/A'}</p>
-                        <p className="text-sm text-purple-100">
+                      <div className="flex-1 min-w-0 pr-3">
+                        <p className="text-sm font-semibold text-white truncate">{transaction.student?.name || 'N/A'}</p>
+                        <p className="text-xs text-purple-100">
                           {transaction.student?.course?.toUpperCase()} • {formatDate(transaction.transactionDate)}
                         </p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold text-white">{formatCurrency(transaction.totalAmount)}</p>
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${transaction.isPaid
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-bold text-white">{formatCurrency(transaction.totalAmount)}</p>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${transaction.isPaid
                           ? 'bg-green-400/30 text-green-100 border border-green-300/50'
                           : 'bg-red-400/30 text-red-100 border border-red-300/50'
                           }`}>
@@ -468,61 +573,61 @@ const Dashboard = () => {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8">
-                  <FileText className="w-12 h-12 text-white/50 mx-auto mb-2" />
-                  <p className="text-purple-100">No recent transactions</p>
+                <div className="text-center py-6">
+                  <FileText className="w-8 h-8 text-white/50 mx-auto mb-1.5" />
+                  <p className="text-xs text-purple-100">No recent transactions</p>
                 </div>
               )}
             </div>
           </div>
 
           {/* Quick Actions */}
-          <div className="bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl shadow-lg hover:shadow-xl transition-shadow">
-            <div className="p-6 border-b border-white/20">
-              <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                  <Activity size={20} className="text-white" />
+          <div className="bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl shadow-md hover:shadow-lg transition-shadow">
+            <div className="p-3.5 px-4 border-b border-white/20">
+              <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                  <Activity size={16} className="text-white" />
                 </div>
                 Quick Actions
               </h3>
             </div>
-            <div className="p-6">
-              <div className="grid grid-cols-2 gap-4">
+            <div className="p-4">
+              <div className="grid grid-cols-2 gap-2.5">
                 <button
                   onClick={() => navigate('/add-student')}
-                  className="flex flex-col items-center justify-center p-4 bg-white/20 rounded-xl hover:bg-white/30 transition-colors group backdrop-blur-sm"
+                  className="flex flex-col items-center justify-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition-colors group backdrop-blur-sm"
                 >
-                  <div className="w-10 h-10 bg-white/30 rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                    <Users size={20} className="text-white" />
+                  <div className="w-8 h-8 bg-white/30 rounded-lg flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+                    <Users size={16} className="text-white" />
                   </div>
-                  <span className="text-sm font-medium text-white">Add Student</span>
+                  <span className="text-xs font-medium text-white">Add Student</span>
                 </button>
                 <button
                   onClick={() => navigate('/manage-stock')}
-                  className="flex flex-col items-center justify-center p-4 bg-white/20 rounded-xl hover:bg-white/30 transition-colors group backdrop-blur-sm"
+                  className="flex flex-col items-center justify-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition-colors group backdrop-blur-sm"
                 >
-                  <div className="w-10 h-10 bg-white/30 rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                    <Package size={20} className="text-white" />
+                  <div className="w-8 h-8 bg-white/30 rounded-lg flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+                    <Package size={16} className="text-white" />
                   </div>
-                  <span className="text-sm font-medium text-white">Manage Stock</span>
+                  <span className="text-xs font-medium text-white">Manage Stock</span>
                 </button>
                 <button
                   onClick={() => navigate('/transactions')}
-                  className="flex flex-col items-center justify-center p-4 bg-white/20 rounded-xl hover:bg-white/30 transition-colors group backdrop-blur-sm"
+                  className="flex flex-col items-center justify-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition-colors group backdrop-blur-sm"
                 >
-                  <div className="w-10 h-10 bg-white/30 rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                    <ShoppingCart size={20} className="text-white" />
+                  <div className="w-8 h-8 bg-white/30 rounded-lg flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+                    <ShoppingCart size={16} className="text-white" />
                   </div>
-                  <span className="text-sm font-medium text-white">Transactions</span>
+                  <span className="text-xs font-medium text-white">Transactions</span>
                 </button>
                 <button
                   onClick={() => navigate('/student-management')}
-                  className="flex flex-col items-center justify-center p-4 bg-white/20 rounded-xl hover:bg-white/30 transition-colors group backdrop-blur-sm"
+                  className="flex flex-col items-center justify-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition-colors group backdrop-blur-sm"
                 >
-                  <div className="w-10 h-10 bg-white/30 rounded-lg flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
-                    <Activity size={20} className="text-white" />
+                  <div className="w-8 h-8 bg-white/30 rounded-lg flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+                    <Activity size={16} className="text-white" />
                   </div>
-                  <span className="text-sm font-medium text-white">Manage Students</span>
+                  <span className="text-xs font-medium text-white">Manage Students</span>
                 </button>
               </div>
             </div>
@@ -677,7 +782,7 @@ const Dashboard = () => {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">Stock Value Breakdown</h2>
-                  <p className="text-sm text-gray-500">Total Value: {formatCurrency(stats.totalStockValue)}</p>
+                  <p className="text-sm text-gray-500">Total Value: {formatCurrency(displayStockValue)}</p>
                 </div>
               </div>
               <button
@@ -717,7 +822,7 @@ const Dashboard = () => {
                     <tfoot className="bg-gray-50">
                       <tr>
                         <td colSpan="3" className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">Total Stock Value:</td>
-                        <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">{formatCurrency(stats.totalStockValue)}</td>
+                        <td className="px-4 py-3 text-sm font-bold text-gray-900 text-right">{formatCurrency(displayStockValue)}</td>
                       </tr>
                     </tfoot>
                   </table>

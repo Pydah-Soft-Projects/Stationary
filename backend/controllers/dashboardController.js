@@ -1,6 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const { Transaction } = require('../models/transactionModel');
 const { Product } = require('../models/productModel');
+const { College } = require('../models/collegeModel');
 const { getMySqlPool } = require('../config/mysql');
 const mongoose = require('mongoose');
 
@@ -8,11 +9,40 @@ const mongoose = require('mongoose');
 // @route   GET /api/dashboard/stats
 // @access  Private/Admin
 const getDashboardStats = asyncHandler(async (req, res) => {
-  const { collegeId } = req.query;
+  const { collegeId, startDate, endDate } = req.query;
   const filter = {};
   
   if (collegeId) {
     filter.collegeId = new mongoose.Types.ObjectId(collegeId);
+  }
+
+  // --- Abstract Date Range ---
+  let abstractStart;
+  let abstractEnd;
+
+  if (startDate) {
+    abstractStart = new Date(startDate.includes('T') ? startDate : `${startDate}T00:00:00`);
+    if (isNaN(abstractStart.getTime())) {
+      abstractStart = new Date();
+      abstractStart.setHours(0, 0, 0, 0);
+    }
+  } else {
+    abstractStart = new Date();
+    abstractStart.setHours(0, 0, 0, 0);
+  }
+
+  if (endDate) {
+    abstractEnd = new Date(endDate.includes('T') ? endDate : `${endDate}T23:59:59.999`);
+    if (isNaN(abstractEnd.getTime())) {
+      abstractEnd = new Date(abstractStart);
+      abstractEnd.setHours(23, 59, 59, 999);
+    }
+  } else if (startDate) {
+    abstractEnd = new Date(abstractStart);
+    abstractEnd.setHours(23, 59, 59, 999);
+  } else {
+    abstractEnd = new Date();
+    abstractEnd.setHours(23, 59, 59, 999);
   }
 
   // --- MySQL Stats (Students) ---
@@ -33,9 +63,6 @@ const getDashboardStats = asyncHandler(async (req, res) => {
   }
 
   // --- MongoDB Stats (Transactions & Revenue) ---
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
   // Revenue Aggregation
   const revenueStats = await Transaction.aggregate([
     { $match: filter },
@@ -48,7 +75,13 @@ const getDashboardStats = asyncHandler(async (req, res) => {
         todayRevenue: { 
           $sum: { 
             $cond: [
-              { $and: [{ $eq: ['$isPaid', true] }, { $gte: ['$transactionDate', today] }] }, 
+              { 
+                $and: [
+                  { $eq: ['$isPaid', true] }, 
+                  { $gte: ['$transactionDate', abstractStart] },
+                  { $lte: ['$transactionDate', abstractEnd] }
+                ] 
+              }, 
               '$totalAmount', 
               0
             ] 
@@ -57,7 +90,13 @@ const getDashboardStats = asyncHandler(async (req, res) => {
         todayCashRevenue: { 
           $sum: { 
             $cond: [
-              { $and: [{ $eq: ['$isPaid', true] }, { $gte: ['$transactionDate', today] }] }, 
+              { 
+                $and: [
+                  { $eq: ['$isPaid', true] }, 
+                  { $gte: ['$transactionDate', abstractStart] },
+                  { $lte: ['$transactionDate', abstractEnd] }
+                ] 
+              }, 
               { $ifNull: ['$cashAmount', 0] }, 
               0
             ] 
@@ -66,14 +105,31 @@ const getDashboardStats = asyncHandler(async (req, res) => {
         todayOnlineRevenue: { 
           $sum: { 
             $cond: [
-              { $and: [{ $eq: ['$isPaid', true] }, { $gte: ['$transactionDate', today] }] }, 
+              { 
+                $and: [
+                  { $eq: ['$isPaid', true] }, 
+                  { $gte: ['$transactionDate', abstractStart] },
+                  { $lte: ['$transactionDate', abstractEnd] }
+                ] 
+              }, 
               { $ifNull: ['$onlineAmount', 0] }, 
               0
             ] 
           } 
         },
         todayTransactions: {
-          $sum: { $cond: [{ $gte: ['$transactionDate', today] }, 1, 0] }
+          $sum: { 
+            $cond: [
+              { 
+                $and: [
+                  { $gte: ['$transactionDate', abstractStart] },
+                  { $lte: ['$transactionDate', abstractEnd] }
+                ] 
+              }, 
+              1, 
+              0
+            ] 
+          }
         }
       }
     }
@@ -90,12 +146,47 @@ const getDashboardStats = asyncHandler(async (req, res) => {
   };
 
   // --- Product & Stock Stats ---
-  const totalProducts = await Product.countDocuments();
-  
-  // Low Stock Count
-  const lowStockItems = await Product.countDocuments({
-    $expr: { $lt: ['$stock', { $ifNull: ['$lowStockThreshold', 10] }] }
-  });
+  let totalProducts = 0;
+  let lowStockItems = 0;
+  let totalStockValue = 0;
+
+  if (collegeId) {
+    const college = await College.findById(collegeId).populate('stock.product', 'name price lowStockThreshold');
+    if (college && Array.isArray(college.stock)) {
+      totalProducts = college.stock.filter(item => item?.product).length;
+      college.stock.forEach(item => {
+        if (!item?.product) return;
+        const qty = Number(item.quantity) || 0;
+        const price = Number(item.product.price) || 0;
+        const threshold = typeof item.product.lowStockThreshold === 'number' ? item.product.lowStockThreshold : 10;
+        totalStockValue += qty * price;
+        if (qty < threshold) {
+          lowStockItems++;
+        }
+      });
+    }
+  } else {
+    totalProducts = await Product.countDocuments();
+    lowStockItems = await Product.countDocuments({
+      $expr: { $lt: ['$stock', { $ifNull: ['$lowStockThreshold', 10] }] }
+    });
+    const stockAgg = await Product.aggregate([
+      {
+        $group: {
+          _id: null,
+          totalStockValue: {
+            $sum: {
+              $multiply: [
+                { $ifNull: ['$stock', 0] },
+                { $ifNull: ['$price', 0] }
+              ]
+            }
+          }
+        }
+      }
+    ]);
+    totalStockValue = stockAgg[0]?.totalStockValue || 0;
+  }
 
   // --- Recent Transactions ---
   const recentTransactions = await Transaction.find(filter)
@@ -181,7 +272,7 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     totalRevenue: rev.totalRevenue,
     pendingRevenue: rev.pendingRevenue,
     totalProducts,
-    totalStockValue: 0, // Can be calculated if needed, likely heavy
+    totalStockValue,
     lowStockItems,
     todayTransactions: rev.todayTransactions,
     todayRevenue: rev.todayRevenue,
