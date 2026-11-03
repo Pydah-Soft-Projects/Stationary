@@ -1,12 +1,115 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Package, Plus, Building2, Archive, List, Lock, Filter } from 'lucide-react';
+import { Package, Plus, Building2, Archive, List, Lock, Filter, ChevronDown, Check } from 'lucide-react';
 import AddProduct from './stock/AddProduct';
 import AddStock from './stock/AddStock';
 import VendorManagement from './stock/VendorManagement';
 import StockEntries from './stock/StockEntries';
 import { hasViewAccess } from '../utils/permissions';
 import { apiUrl } from '../utils/api';
+
+// Custom Context Selector Dropdown (avoiding cramped native select)
+const ContextSelector = ({ viewContext, setViewContext, colleges }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  const selectedCollege = colleges.find(c => String(c._id) === String(viewContext));
+  const selectedLabel = viewContext === 'central'
+    ? 'Central Warehouse'
+    : (selectedCollege?.name || 'Selected Campus');
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        type="button"
+        onClick={() => setIsOpen(prev => !prev)}
+        className="flex items-center gap-2 bg-white hover:bg-gray-50/80 px-3.5 py-2 rounded-xl border border-gray-200 shadow-sm transition-all text-left outline-none cursor-pointer group"
+      >
+        <Filter size={14} className="text-blue-500 flex-shrink-0" />
+        <span className="text-xs text-gray-500 font-medium whitespace-nowrap">View Stock For:</span>
+        <span className="text-xs font-bold text-gray-800 whitespace-nowrap max-w-[150px] sm:max-w-[200px] md:max-w-[260px] truncate">
+          {selectedLabel}
+        </span>
+        <ChevronDown
+          size={14}
+          className={`text-gray-400 transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180 text-blue-500' : 'group-hover:text-gray-600'}`}
+        />
+      </button>
+
+      {isOpen && (
+        <div className="absolute right-0 top-full mt-1.5 w-72 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden py-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="px-3.5 py-1.5 border-b border-gray-100 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+            Select Location
+          </div>
+
+          <div className="max-h-64 overflow-y-auto divide-y divide-gray-50">
+            {/* Central Warehouse option */}
+            <button
+              type="button"
+              onClick={() => {
+                setViewContext('central');
+                setIsOpen(false);
+              }}
+              className={`w-full px-3.5 py-2.5 text-left flex items-center justify-between text-xs transition-colors ${
+                viewContext === 'central'
+                  ? 'bg-blue-50 text-blue-700 font-bold'
+                  : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900 font-medium'
+              }`}
+            >
+              <div className="flex items-center gap-2 truncate pr-2">
+                <Building2 size={14} className={viewContext === 'central' ? 'text-blue-600' : 'text-gray-400'} />
+                <span className="truncate">Central Warehouse (Global)</span>
+              </div>
+              {viewContext === 'central' && (
+                <Check size={14} className="text-blue-600 flex-shrink-0" />
+              )}
+            </button>
+
+            {/* College options */}
+            {colleges.map(college => {
+              const isSelected = String(viewContext) === String(college._id);
+              return (
+                <button
+                  key={college._id}
+                  type="button"
+                  onClick={() => {
+                    setViewContext(college._id);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full px-3.5 py-2.5 text-left flex items-center justify-between text-xs transition-colors ${
+                    isSelected
+                      ? 'bg-blue-50 text-blue-700 font-bold'
+                      : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900 font-medium'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 truncate pr-2">
+                    <Building2 size={14} className={isSelected ? 'text-blue-600' : 'text-gray-400'} />
+                    <span className="truncate" title={college.name}>{college.name}</span>
+                  </div>
+                  {isSelected && (
+                    <Check size={14} className="text-blue-600 flex-shrink-0" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const ManageStock = ({ itemCategories, addItemCategory, setItemCategories, currentCourse, products = [], setProducts, currentUser }) => {
   // Check access level
@@ -127,22 +230,11 @@ const ManageStock = ({ itemCategories, addItemCategory, setItemCategories, curre
               <div className="flex flex-wrap items-center gap-3">
                 {/* Admin Context Selector */}
                 {isSuperAdmin && (
-                  <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-200 shadow-sm">
-                    <span className="text-xs font-medium text-gray-600 flex items-center gap-1.5 whitespace-nowrap">
-                      <Filter size={14} className="text-gray-400" />
-                      <span>View Stock For:</span>
-                    </span>
-                    <select
-                      className="text-xs font-semibold text-gray-800 bg-transparent border-0 outline-none cursor-pointer focus:ring-0 pr-2"
-                      value={viewContext}
-                      onChange={(e) => setViewContext(e.target.value)}
-                    >
-                      <option value="central">Central Warehouse</option>
-                      {colleges.map(c => (
-                        <option key={c._id} value={c._id}>{c.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <ContextSelector
+                    viewContext={viewContext}
+                    setViewContext={setViewContext}
+                    colleges={colleges}
+                  />
                 )}
 
                 {/* Add Product Button */}
@@ -160,22 +252,11 @@ const ManageStock = ({ itemCategories, addItemCategory, setItemCategories, curre
           </div>
         ) : activeTab === 'entries' && isSuperAdmin ? (
           <div className="mb-2 flex items-center justify-end px-6">
-            <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-xl border border-gray-200 shadow-sm">
-              <span className="text-xs font-medium text-gray-600 flex items-center gap-1.5 whitespace-nowrap">
-                <Filter size={14} className="text-gray-400" />
-                <span>View Stock For:</span>
-              </span>
-              <select
-                className="text-xs font-semibold text-gray-800 bg-transparent border-0 outline-none cursor-pointer focus:ring-0 pr-2"
-                value={viewContext}
-                onChange={(e) => setViewContext(e.target.value)}
-              >
-                <option value="central">Central Warehouse</option>
-                {colleges.map(c => (
-                  <option key={c._id} value={c._id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
+            <ContextSelector
+              viewContext={viewContext}
+              setViewContext={setViewContext}
+              colleges={colleges}
+            />
           </div>
         ) : null}
 
