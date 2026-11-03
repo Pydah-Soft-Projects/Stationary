@@ -307,6 +307,19 @@ const listSubAdmins = asyncHandler(async (req, res) => {
     let employeeName = null;
     let empNo = sa.empNo || null;
 
+    if (sa.role === 'Administrator' || sa.name === 'superadmin') {
+      return { 
+        _id: sa._id, 
+        name: 'Administrator', 
+        empNo: null,
+        employeeName: 'Administrator',
+        role: 'Administrator', 
+        permissions: sa.permissions || [], 
+        assignedCollege: college,
+        assignedBranch: college
+      };
+    }
+
     if (conn) {
       try {
         const searchKey = String(sa.empNo || sa.name || '').trim();
@@ -592,7 +605,11 @@ const loginSubAdmin = asyncHandler(async (req, res) => {
       if (!conn) {
         try { conn = await connectEmployeeDB(); } catch (e) {}
       }
-      if (conn) {
+
+      if (sub.role === 'Administrator' || sub.name === 'superadmin') {
+        employeeName = 'Administrator';
+        empNo = null;
+      } else if (conn) {
         try {
           const searchKey = String(sub.empNo || sub.name || '').trim();
           const escaped = searchKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
