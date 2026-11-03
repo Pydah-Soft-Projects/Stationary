@@ -28,12 +28,14 @@ const getStudentDues = asyncHandler(async (req, res) => {
         search,
         kitId, // single kit filter (legacy)
         kitIds, // multiple kit filter
+        studentStatus, // single status
+        studentStatuses, // multiple statuses (comma-separated or array)
         limit = 50,
         page = 1,
         includeSummary = 'false', // to return total counts
     } = req.query;
 
-    console.log('getStudentDues params:', { course, branch, year, page, kitId, kitIds });
+    console.log('getStudentDues params:', { course, branch, year, page, kitId, kitIds, studentStatus, studentStatuses });
 
     // Handle kitIds (could be string or array)
     let selectedKitIds = [];
@@ -43,9 +45,33 @@ const getStudentDues = asyncHandler(async (req, res) => {
         selectedKitIds = [kitId];
     }
 
+    // Handle student statuses
+    let selectedStatuses = [];
+    if (studentStatuses) {
+        selectedStatuses = Array.isArray(studentStatuses) ? studentStatuses : String(studentStatuses).split(',');
+    } else if (studentStatus) {
+        selectedStatuses = Array.isArray(studentStatus) ? studentStatus : String(studentStatus).split(',');
+    }
+    selectedStatuses = selectedStatuses.map(s => String(s).trim()).filter(Boolean);
+
+
+    const targetCourseId = req.query.courseId || (course && /^\d+$/.test(String(course).trim()) ? String(course).trim() : null);
+    let targetCourseName = course && !/^\d+$/.test(String(course).trim()) && course !== 'all' ? String(course).trim() : null;
+
+    if (targetCourseId && !targetCourseName) {
+        try {
+            const [cRows] = await pool.query('SELECT name FROM courses WHERE id = ?', [targetCourseId]);
+            if (cRows && cRows.length > 0) {
+                targetCourseName = cRows[0].name;
+            }
+        } catch (cErr) {
+            console.warn('[Dues] Failed to lookup course name for id:', targetCourseId);
+        }
+    }
+
     // OPTIMIZATION: Require Course Selection
     // Fetching ALL students from SQL is too heavy. We enforce selecting a course first.
-    if (!course) {
+    if (!course && !targetCourseId) {
         return res.json({
             students: [],
             total: 0,
@@ -66,12 +92,21 @@ const getStudentDues = asyncHandler(async (req, res) => {
     const conditions = [];
     const params = [];
 
-    if (course && course !== 'all') {
+    if (targetCourseId) {
+        conditions.push(`(course_id = ? OR course = ?)`);
+        params.push(parseInt(targetCourseId, 10), targetCourseId);
+    } else if (targetCourseName) {
         conditions.push(`course = ?`);
-        params.push(course);
+        params.push(targetCourseName);
     }
-    if (branch && branch !== 'all') {
-        const bLower = branch.toLowerCase().trim();
+    const targetBranchId = req.query.branchId || (branch && /^\d+$/.test(String(branch).trim()) ? String(branch).trim() : null);
+    const targetBranchName = branch && !/^\d+$/.test(String(branch).trim()) && branch !== 'all' ? String(branch).trim() : null;
+
+    if (targetBranchId) {
+        conditions.push(`(branch_id = ? OR branch = ?)`);
+        params.push(parseInt(targetBranchId, 10), targetBranchId);
+    } else if (targetBranchName) {
+        const bLower = targetBranchName.toLowerCase().trim();
         let branchOptions = [bLower];
         
         if (bLower === 'cse' || bLower.includes('computer science')) {
@@ -139,8 +174,9 @@ const getStudentDues = asyncHandler(async (req, res) => {
 
     // 2. Prepare Product Query (Mongo)
     const productQuery = {};
-    if (course) {
-        productQuery.forCourse = { $in: [course, course.toLowerCase().trim(), course.toUpperCase().trim()] };
+    const courseForProduct = targetCourseName || course;
+    if (courseForProduct) {
+        productQuery.forCourse = { $in: [courseForProduct, courseForProduct.toLowerCase().trim(), courseForProduct.toUpperCase().trim()] };
     }
 
     try {
@@ -164,11 +200,29 @@ const getStudentDues = asyncHandler(async (req, res) => {
             return student;
         }) : [];
 
-        // Filter out withdrawn/cancelled students
-        allStudents = allStudents.filter(student => {
-            const status = String(student.status || '').toLowerCase();
-            return !status.includes('cancel') && !status.includes('withdrawn') && !status.includes('discontinued');
-        });
+        // Student status filter logic
+        const hasStatusParam = Boolean(req.query.studentStatus || req.query.studentStatuses);
+        const isAllSelected = selectedStatuses.some(s => s.toLowerCase() === 'all');
+
+        if (hasStatusParam && !isAllSelected && selectedStatuses.length > 0) {
+            const statusSet = new Set(selectedStatuses.map(s => s.toLowerCase()));
+            allStudents = allStudents.filter(student => {
+                const s = String(student.status || '').trim().toLowerCase();
+                if (statusSet.has(s)) return true;
+                if (statusSet.has('course completed') && (s === 'course complated' || s === 'course completed')) return true;
+                if ((statusSet.has('rejoined') || statusSet.has('re-joined')) && (s === 'rejoined' || s === 're-joined')) return true;
+                if (statusSet.has('admission cancelled') && s.includes('cancel')) return true;
+                return false;
+            });
+        } else if (!hasStatusParam) {
+            // Default filter if no student status param is specified:
+            // Filter out withdrawn/cancelled students for backward compatibility
+            allStudents = allStudents.filter(student => {
+                const status = String(student.status || '').toLowerCase();
+                return !status.includes('cancel') && !status.includes('withdrawn') && !status.includes('discontinued');
+            });
+        }
+
 
         console.log(`[Dues] Debug: After filtering active students: ${allStudents.length}`);
 
@@ -332,6 +386,7 @@ const getStudentDues = asyncHandler(async (req, res) => {
                     semester: student.semester,
                     pin: student.pin,
                     phoneNumber: student.phoneNumber,
+                    status: student.status,
                 },
                 pendingItems,
                 totalDue: pendingCost,

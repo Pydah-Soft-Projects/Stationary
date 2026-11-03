@@ -138,13 +138,25 @@ const getSqlStudents = asyncHandler(async (req, res) => {
     params.push(containsPattern, prefixPattern, prefixPattern, prefixPattern);
   }
 
-  if (course && course !== 'all') {
+  const targetCourseId = req.query.courseId || (course && /^\d+$/.test(String(course).trim()) ? String(course).trim() : null);
+  const targetCourseName = course && !/^\d+$/.test(String(course).trim()) && course !== 'all' ? String(course).trim() : null;
+
+  if (targetCourseId) {
+    conditions.push(`(course_id = ? OR course = ?)`);
+    params.push(parseInt(targetCourseId, 10), targetCourseId);
+  } else if (targetCourseName) {
     conditions.push(`course = ?`);
-    params.push(course);
+    params.push(targetCourseName);
   }
 
-  if (branch && branch !== 'all') {
-    const bLower = branch.toLowerCase().trim();
+  const targetBranchId = req.query.branchId || (branch && /^\d+$/.test(String(branch).trim()) ? String(branch).trim() : null);
+  const targetBranchName = branch && !/^\d+$/.test(String(branch).trim()) && branch !== 'all' ? String(branch).trim() : null;
+
+  if (targetBranchId) {
+    conditions.push(`(branch_id = ? OR branch = ?)`);
+    params.push(parseInt(targetBranchId, 10), targetBranchId);
+  } else if (targetBranchName) {
+    const bLower = targetBranchName.toLowerCase().trim();
     let branchOptions = [bLower];
     
     if (bLower === 'cse' || bLower.includes('computer science')) {
@@ -201,7 +213,7 @@ const getSqlStudents = asyncHandler(async (req, res) => {
 
   try {
     if (fetchAll) {
-      const allSql = `SELECT id, student_name, admission_number, pin_no, course, branch, current_year, current_semester, student_status, student_mobile, batch FROM \`${tableName}\` ${whereClause} ORDER BY id ASC`;
+      const allSql = `SELECT id, student_name, admission_number, pin_no, course, branch, current_year, current_semester, student_status, student_mobile, batch, course_id, branch_id, college_id FROM \`${tableName}\` ${whereClause} ORDER BY id ASC`;
       const [rows] = await pool.query(allSql, params);
       const students = Array.isArray(rows) ? rows.map(normalizeStudentRow) : [];
       return res.json({

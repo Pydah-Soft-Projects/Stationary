@@ -14,42 +14,42 @@ const TableSkeleton = () => (
   <table className="w-full text-left border-collapse">
     <thead>
       <tr className="bg-gray-50 border-b border-gray-200 text-xs uppercase text-gray-500 tracking-wider">
-        <th className="px-6 py-3 font-semibold">Student Name</th>
-        <th className="px-6 py-3 font-semibold">Admission No</th>
-        <th className="px-6 py-3 font-semibold">PIN</th>
-        <th className="px-6 py-3 font-semibold">Course</th>
-        <th className="px-6 py-3 font-semibold">Year</th>
-        <th className="px-6 py-3 font-semibold">Semester</th>
-        <th className="px-6 py-3 font-semibold">Branch</th>
-        <th className="px-6 py-3 font-semibold">Status</th>
+        <th className="px-4 py-2.5 font-semibold">Student Name</th>
+        <th className="px-4 py-2.5 font-semibold">Admission No</th>
+        <th className="px-4 py-2.5 font-semibold">PIN</th>
+        <th className="px-4 py-2.5 font-semibold">Course</th>
+        <th className="px-4 py-2.5 font-semibold">Year</th>
+        <th className="px-4 py-2.5 font-semibold">Semester</th>
+        <th className="px-4 py-2.5 font-semibold">Branch</th>
+        <th className="px-4 py-2.5 font-semibold">Status</th>
       </tr>
     </thead>
-    <tbody className="divide-y divide-gray-100 animate-pulse">
+    <tbody className="divide-y divide-gray-100 animate-pulse text-xs">
       {[...Array(6)].map((_, i) => (
         <tr key={i} className="hover:bg-gray-50">
-          <td className="px-6 py-4">
-            <div className="h-4 bg-gray-200 rounded w-36"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-3.5 bg-gray-200 rounded w-36"></div>
           </td>
-          <td className="px-6 py-4">
-            <div className="h-4 bg-gray-200 rounded w-24"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-3.5 bg-gray-200 rounded w-24"></div>
           </td>
-          <td className="px-6 py-4">
-            <div className="h-4 bg-gray-200 rounded w-20"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-3.5 bg-gray-200 rounded w-20"></div>
           </td>
-          <td className="px-6 py-4">
-            <div className="h-5 bg-indigo-100 rounded-full w-16"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-4 bg-indigo-100 rounded w-16"></div>
           </td>
-          <td className="px-6 py-4">
-            <div className="h-4 bg-gray-200 rounded w-8"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-3.5 bg-gray-200 rounded w-8"></div>
           </td>
-          <td className="px-6 py-4">
-            <div className="h-4 bg-gray-200 rounded w-8"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-3.5 bg-gray-200 rounded w-8"></div>
           </td>
-          <td className="px-6 py-4">
-            <div className="h-4 bg-gray-200 rounded w-24"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-3.5 bg-gray-200 rounded w-24"></div>
           </td>
-          <td className="px-6 py-4">
-            <div className="h-5 bg-gray-200 rounded-full w-16"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-4 bg-gray-200 rounded w-16"></div>
           </td>
         </tr>
       ))}
@@ -218,6 +218,11 @@ const StudentDashboard = ({ currentUser }) => {
         const courseObj = (courses || []).find(c => String(c.id) === selectedCourse || c.name === selectedCourse);
         if (!courseObj) return;
 
+        // Prefill immediately if branches are already bundled with the course object
+        if (Array.isArray(courseObj.branches) && courseObj.branches.length > 0) {
+          setBranches(courseObj.branches);
+        }
+
         const res = await fetch(apiUrl(`/api/sql/academic/branches?courseId=${courseObj.id}`));
         if (res.ok) {
           const data = await res.json();
@@ -274,6 +279,41 @@ const StudentDashboard = ({ currentUser }) => {
   const years = [1, 2, 3, 4];
   const semesters = [1, 2, 3, 4, 5, 6, 7, 8];
 
+  // Helper to format course display options: if multiple courses share the same name,
+  // append their branches to differentiate them clearly
+  const courseOptions = useMemo(() => {
+    const counts = {};
+    (courses || []).forEach(c => {
+      const key = (c.name || '').trim().toLowerCase();
+      if (key) {
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    });
+
+    return (courses || []).map(c => {
+      const key = (c.name || '').trim().toLowerCase();
+      const isDuplicate = (counts[key] || 0) > 1;
+
+      if (isDuplicate) {
+        const branchNames = (c.branches || [])
+          .map(b => (typeof b === 'object' ? b?.name : b))
+          .filter(Boolean);
+
+        if (branchNames.length > 0) {
+          return {
+            ...c,
+            displayLabel: `${c.name} (${branchNames.join(', ')})`
+          };
+        }
+      }
+
+      return {
+        ...c,
+        displayLabel: c.name
+      };
+    });
+  }, [courses]);
+
   // 0ms Instant Client-Side In-Memory Filtering across all students
   const filteredStudents = useMemo(() => {
     if (!allStudents || allStudents.length === 0) return [];
@@ -281,28 +321,52 @@ const StudentDashboard = ({ currentUser }) => {
     const query = searchTerm.trim().toLowerCase();
     const cleanQuery = query.replace(/[^a-z0-9]/g, '');
 
-    const selectedCourseObj = selectedCourse ? (courses || []).find(c => String(c.id) === String(selectedCourse)) : null;
+    const selectedCourseObj = selectedCourse ? (courses || []).find(c => String(c.id) === String(selectedCourse) || c.name === selectedCourse) : null;
     const courseNameTarget = selectedCourseObj ? selectedCourseObj.name.toLowerCase() : (selectedCourse ? String(selectedCourse).toLowerCase() : '');
 
-    const selectedBranchObj = selectedBranch ? (branches || []).find(b => String(b.id) === String(selectedBranch)) : null;
+    const selectedBranchObj = selectedBranch ? (branches || []).find(b => String(b.id) === String(selectedBranch) || b.name === selectedBranch) : null;
     const branchNameTarget = selectedBranchObj ? selectedBranchObj.name.toLowerCase() : (selectedBranch ? String(selectedBranch).toLowerCase() : '');
+
+    // Get all branch names and branch IDs belonging to the selected course
+    const courseBranchNames = selectedCourseObj && Array.isArray(selectedCourseObj.branches)
+      ? selectedCourseObj.branches.map(b => (typeof b === 'object' ? b.name : b).toLowerCase().trim())
+      : [];
+    const courseBranchIds = selectedCourseObj && Array.isArray(selectedCourseObj.branches)
+      ? selectedCourseObj.branches.map(b => String(typeof b === 'object' ? b.id : b))
+      : [];
 
     return allStudents.filter(student => {
       // Course filter
       if (selectedCourse) {
         const sCourse = (student.course || '').toLowerCase();
-        const cMatch = String(student.courseId) === String(selectedCourse) || 
-                       sCourse === courseNameTarget ||
-                       normalizeCourse(student.course) === normalizeCourse(courseNameTarget);
+        const sBranch = (student.branch || '').toLowerCase().trim();
+        const sCourseId = student.courseId != null && student.courseId !== '' ? String(student.courseId) : null;
+        const sBranchId = student.branchId != null && student.branchId !== '' ? String(student.branchId) : null;
+        const targetCourseId = selectedCourseObj ? String(selectedCourseObj.id) : String(selectedCourse);
+
+        let cMatch = false;
+        if (sCourseId) {
+          cMatch = sCourseId === targetCourseId;
+        } else if (courseBranchIds.length > 0 && sBranchId && courseBranchIds.includes(sBranchId)) {
+          cMatch = true;
+        } else if (courseBranchNames.length > 0 && sBranch && courseBranchNames.includes(sBranch)) {
+          cMatch = true;
+        } else {
+          cMatch = sCourse === courseNameTarget || normalizeCourse(student.course) === normalizeCourse(courseNameTarget);
+        }
+
         if (!cMatch) return false;
       }
 
       // Branch filter
       if (selectedBranch) {
         const sBranch = (student.branch || '').toLowerCase();
-        const bMatch = String(student.branchId) === String(selectedBranch) || 
-                       sBranch === branchNameTarget ||
-                       sBranch.startsWith(branchNameTarget);
+        const bMatch = (student.branchId !== null && student.branchId !== undefined && student.branchId !== '')
+          ? (selectedBranchObj ? String(student.branchId) === String(selectedBranchObj.id) : String(student.branchId) === String(selectedBranch))
+          : (
+              sBranch === branchNameTarget ||
+              sBranch.startsWith(branchNameTarget)
+            );
         if (!bMatch) return false;
       }
 
@@ -418,8 +482,8 @@ const StudentDashboard = ({ currentUser }) => {
                 }}
               >
                 <option value="">All Courses</option>
-                {courses.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                {courseOptions.map(c => (
+                  <option key={c.id} value={c.id}>{c.displayLabel}</option>
                 ))}
               </select>
             </div>
@@ -521,42 +585,42 @@ const StudentDashboard = ({ currentUser }) => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-xs uppercase text-gray-500 tracking-wider">
-                    <th className="px-6 py-3 font-semibold">Student Name</th>
-                    <th className="px-6 py-3 font-semibold">Admission No</th>
-                    <th className="px-6 py-3 font-semibold">PIN</th>
-                    <th className="px-6 py-3 font-semibold">Course</th>
-                    <th className="px-6 py-3 font-semibold">Year</th>
-                    <th className="px-6 py-3 font-semibold">Semester</th>
-                    <th className="px-6 py-3 font-semibold">Branch</th>
-                    <th className="px-6 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-2.5 font-semibold">Student Name</th>
+                    <th className="px-4 py-2.5 font-semibold">Admission No</th>
+                    <th className="px-4 py-2.5 font-semibold">PIN</th>
+                    <th className="px-4 py-2.5 font-semibold">Course</th>
+                    <th className="px-4 py-2.5 font-semibold">Year</th>
+                    <th className="px-4 py-2.5 font-semibold">Semester</th>
+                    <th className="px-4 py-2.5 font-semibold">Branch</th>
+                    <th className="px-4 py-2.5 font-semibold">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 text-xs">
                   {displayStudents.map((student) => (
                     <tr
                       key={student.id}
                       onClick={() => navigate(`/student/${student.id}`)}
-                      className="hover:bg-blue-50 transition-colors group cursor-pointer"
+                      className="hover:bg-blue-50/70 transition-colors group cursor-pointer"
                     >
-                      <td className="px-6 py-4 font-medium text-gray-900">{student.name}</td>
-                      <td className="px-6 py-4 text-gray-600">{student.studentId}</td>
-                      <td className="px-6 py-4 text-gray-600">{student.pin || '-'}</td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                      <td className="px-4 py-2.5 font-medium text-gray-900">{student.name}</td>
+                      <td className="px-4 py-2.5 text-gray-600">{student.studentId}</td>
+                      <td className="px-4 py-2.5 text-gray-600 font-mono text-[11px]">{student.pin || '-'}</td>
+                      <td className="px-4 py-2.5">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
                           {student.course}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-gray-600">{student.year}</td>
-                      <td className="px-6 py-4 text-gray-600">{student.semester || '-'}</td>
-                      <td className="px-6 py-4 text-gray-600">{student.branch}</td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-2.5 text-gray-600">{student.year}</td>
+                      <td className="px-4 py-2.5 text-gray-600">{student.semester || '-'}</td>
+                      <td className="px-4 py-2.5 text-gray-600">{student.branch}</td>
+                      <td className="px-4 py-2.5">
                         {student.status ? (
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            student.status?.toLowerCase() === 'active' ? 'bg-green-100 text-green-800' :
-                            student.status?.toLowerCase() === 'inactive' ? 'bg-gray-100 text-gray-800' :
-                            student.status?.toLowerCase() === 'graduated' ? 'bg-blue-100 text-blue-800' :
-                            student.status?.toLowerCase() === 'cancelled' ? 'bg-red-100 text-red-800' :
-                            'bg-yellow-100 text-yellow-800'
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
+                            student.status?.toLowerCase() === 'active' ? 'bg-green-50 text-green-700 border border-green-200' :
+                            student.status?.toLowerCase() === 'inactive' ? 'bg-gray-50 text-gray-700 border border-gray-200' :
+                            student.status?.toLowerCase() === 'graduated' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                            student.status?.toLowerCase() === 'cancelled' ? 'bg-red-50 text-red-700 border border-red-200' :
+                            'bg-yellow-50 text-yellow-700 border border-yellow-200'
                           }`}>
                             {student.status}
                           </span>
