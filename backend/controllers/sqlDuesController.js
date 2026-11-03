@@ -55,9 +55,23 @@ const getStudentDues = asyncHandler(async (req, res) => {
     selectedStatuses = selectedStatuses.map(s => String(s).trim()).filter(Boolean);
 
 
+    const targetCourseId = req.query.courseId || (course && /^\d+$/.test(String(course).trim()) ? String(course).trim() : null);
+    let targetCourseName = course && !/^\d+$/.test(String(course).trim()) && course !== 'all' ? String(course).trim() : null;
+
+    if (targetCourseId && !targetCourseName) {
+        try {
+            const [cRows] = await pool.query('SELECT name FROM courses WHERE id = ?', [targetCourseId]);
+            if (cRows && cRows.length > 0) {
+                targetCourseName = cRows[0].name;
+            }
+        } catch (cErr) {
+            console.warn('[Dues] Failed to lookup course name for id:', targetCourseId);
+        }
+    }
+
     // OPTIMIZATION: Require Course Selection
     // Fetching ALL students from SQL is too heavy. We enforce selecting a course first.
-    if (!course) {
+    if (!course && !targetCourseId) {
         return res.json({
             students: [],
             total: 0,
@@ -78,12 +92,21 @@ const getStudentDues = asyncHandler(async (req, res) => {
     const conditions = [];
     const params = [];
 
-    if (course && course !== 'all') {
+    if (targetCourseId) {
+        conditions.push(`(course_id = ? OR course = ?)`);
+        params.push(parseInt(targetCourseId, 10), targetCourseId);
+    } else if (targetCourseName) {
         conditions.push(`course = ?`);
-        params.push(course);
+        params.push(targetCourseName);
     }
-    if (branch && branch !== 'all') {
-        const bLower = branch.toLowerCase().trim();
+    const targetBranchId = req.query.branchId || (branch && /^\d+$/.test(String(branch).trim()) ? String(branch).trim() : null);
+    const targetBranchName = branch && !/^\d+$/.test(String(branch).trim()) && branch !== 'all' ? String(branch).trim() : null;
+
+    if (targetBranchId) {
+        conditions.push(`(branch_id = ? OR branch = ?)`);
+        params.push(parseInt(targetBranchId, 10), targetBranchId);
+    } else if (targetBranchName) {
+        const bLower = targetBranchName.toLowerCase().trim();
         let branchOptions = [bLower];
         
         if (bLower === 'cse' || bLower.includes('computer science')) {
@@ -151,8 +174,9 @@ const getStudentDues = asyncHandler(async (req, res) => {
 
     // 2. Prepare Product Query (Mongo)
     const productQuery = {};
-    if (course) {
-        productQuery.forCourse = { $in: [course, course.toLowerCase().trim(), course.toUpperCase().trim()] };
+    const courseForProduct = targetCourseName || course;
+    if (courseForProduct) {
+        productQuery.forCourse = { $in: [courseForProduct, courseForProduct.toLowerCase().trim(), courseForProduct.toUpperCase().trim()] };
     }
 
     try {

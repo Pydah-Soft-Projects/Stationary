@@ -218,6 +218,11 @@ const StudentDashboard = ({ currentUser }) => {
         const courseObj = (courses || []).find(c => String(c.id) === selectedCourse || c.name === selectedCourse);
         if (!courseObj) return;
 
+        // Prefill immediately if branches are already bundled with the course object
+        if (Array.isArray(courseObj.branches) && courseObj.branches.length > 0) {
+          setBranches(courseObj.branches);
+        }
+
         const res = await fetch(apiUrl(`/api/sql/academic/branches?courseId=${courseObj.id}`));
         if (res.ok) {
           const data = await res.json();
@@ -274,6 +279,41 @@ const StudentDashboard = ({ currentUser }) => {
   const years = [1, 2, 3, 4];
   const semesters = [1, 2, 3, 4, 5, 6, 7, 8];
 
+  // Helper to format course display options: if multiple courses share the same name,
+  // append their branches to differentiate them clearly
+  const courseOptions = useMemo(() => {
+    const counts = {};
+    (courses || []).forEach(c => {
+      const key = (c.name || '').trim().toLowerCase();
+      if (key) {
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    });
+
+    return (courses || []).map(c => {
+      const key = (c.name || '').trim().toLowerCase();
+      const isDuplicate = (counts[key] || 0) > 1;
+
+      if (isDuplicate) {
+        const branchNames = (c.branches || [])
+          .map(b => (typeof b === 'object' ? b?.name : b))
+          .filter(Boolean);
+
+        if (branchNames.length > 0) {
+          return {
+            ...c,
+            displayLabel: `${c.name} (${branchNames.join(', ')})`
+          };
+        }
+      }
+
+      return {
+        ...c,
+        displayLabel: c.name
+      };
+    });
+  }, [courses]);
+
   // 0ms Instant Client-Side In-Memory Filtering across all students
   const filteredStudents = useMemo(() => {
     if (!allStudents || allStudents.length === 0) return [];
@@ -281,28 +321,52 @@ const StudentDashboard = ({ currentUser }) => {
     const query = searchTerm.trim().toLowerCase();
     const cleanQuery = query.replace(/[^a-z0-9]/g, '');
 
-    const selectedCourseObj = selectedCourse ? (courses || []).find(c => String(c.id) === String(selectedCourse)) : null;
+    const selectedCourseObj = selectedCourse ? (courses || []).find(c => String(c.id) === String(selectedCourse) || c.name === selectedCourse) : null;
     const courseNameTarget = selectedCourseObj ? selectedCourseObj.name.toLowerCase() : (selectedCourse ? String(selectedCourse).toLowerCase() : '');
 
-    const selectedBranchObj = selectedBranch ? (branches || []).find(b => String(b.id) === String(selectedBranch)) : null;
+    const selectedBranchObj = selectedBranch ? (branches || []).find(b => String(b.id) === String(selectedBranch) || b.name === selectedBranch) : null;
     const branchNameTarget = selectedBranchObj ? selectedBranchObj.name.toLowerCase() : (selectedBranch ? String(selectedBranch).toLowerCase() : '');
+
+    // Get all branch names and branch IDs belonging to the selected course
+    const courseBranchNames = selectedCourseObj && Array.isArray(selectedCourseObj.branches)
+      ? selectedCourseObj.branches.map(b => (typeof b === 'object' ? b.name : b).toLowerCase().trim())
+      : [];
+    const courseBranchIds = selectedCourseObj && Array.isArray(selectedCourseObj.branches)
+      ? selectedCourseObj.branches.map(b => String(typeof b === 'object' ? b.id : b))
+      : [];
 
     return allStudents.filter(student => {
       // Course filter
       if (selectedCourse) {
         const sCourse = (student.course || '').toLowerCase();
-        const cMatch = String(student.courseId) === String(selectedCourse) || 
-                       sCourse === courseNameTarget ||
-                       normalizeCourse(student.course) === normalizeCourse(courseNameTarget);
+        const sBranch = (student.branch || '').toLowerCase().trim();
+        const sCourseId = student.courseId != null && student.courseId !== '' ? String(student.courseId) : null;
+        const sBranchId = student.branchId != null && student.branchId !== '' ? String(student.branchId) : null;
+        const targetCourseId = selectedCourseObj ? String(selectedCourseObj.id) : String(selectedCourse);
+
+        let cMatch = false;
+        if (sCourseId) {
+          cMatch = sCourseId === targetCourseId;
+        } else if (courseBranchIds.length > 0 && sBranchId && courseBranchIds.includes(sBranchId)) {
+          cMatch = true;
+        } else if (courseBranchNames.length > 0 && sBranch && courseBranchNames.includes(sBranch)) {
+          cMatch = true;
+        } else {
+          cMatch = sCourse === courseNameTarget || normalizeCourse(student.course) === normalizeCourse(courseNameTarget);
+        }
+
         if (!cMatch) return false;
       }
 
       // Branch filter
       if (selectedBranch) {
         const sBranch = (student.branch || '').toLowerCase();
-        const bMatch = String(student.branchId) === String(selectedBranch) || 
-                       sBranch === branchNameTarget ||
-                       sBranch.startsWith(branchNameTarget);
+        const bMatch = (student.branchId !== null && student.branchId !== undefined && student.branchId !== '')
+          ? (selectedBranchObj ? String(student.branchId) === String(selectedBranchObj.id) : String(student.branchId) === String(selectedBranch))
+          : (
+              sBranch === branchNameTarget ||
+              sBranch.startsWith(branchNameTarget)
+            );
         if (!bMatch) return false;
       }
 
@@ -418,8 +482,8 @@ const StudentDashboard = ({ currentUser }) => {
                 }}
               >
                 <option value="">All Courses</option>
-                {courses.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
+                {courseOptions.map(c => (
+                  <option key={c.id} value={c.id}>{c.displayLabel}</option>
                 ))}
               </select>
             </div>

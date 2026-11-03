@@ -356,7 +356,38 @@ const StudentDue = ({ currentUser }) => {
   }, [fetchDues, fetchProducts]);
 
   const courseOptions = useMemo(() => {
-    return courses.map(c => c.displayName || c.name).sort();
+    const counts = {};
+    (courses || []).forEach(c => {
+      const key = (c.name || '').trim().toLowerCase();
+      if (key) {
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    });
+
+    return (courses || []).map(c => {
+      const key = (c.name || '').trim().toLowerCase();
+      const isDuplicate = (counts[key] || 0) > 1;
+
+      if (isDuplicate) {
+        const branchNames = (c.branches || [])
+          .map(b => (typeof b === 'object' ? b?.name : b))
+          .filter(Boolean);
+
+        if (branchNames.length > 0) {
+          return {
+            ...c,
+            displayLabel: `${c.name} (${branchNames.join(', ')})`,
+            value: String(c.id)
+          };
+        }
+      }
+
+      return {
+        ...c,
+        displayLabel: c.displayName || c.name,
+        value: String(c.id)
+      };
+    });
   }, [courses]);
 
   const yearOptions = useMemo(() => {
@@ -366,7 +397,7 @@ const StudentDue = ({ currentUser }) => {
       return years.size === 0 ? [1, 2, 3, 4] : Array.from(years).sort((a, b) => a - b);
     }
 
-    const selectedCourse = courses.find(c => (c.displayName || c.name) === dueFilters.course);
+    const selectedCourse = courses.find(c => String(c.id) === String(dueFilters.course) || (c.displayName || c.name) === dueFilters.course);
     if (!selectedCourse) return [1, 2, 3, 4];
 
     if (dueFilters.branch) {
@@ -380,7 +411,7 @@ const StudentDue = ({ currentUser }) => {
   const semesterOptions = useMemo(() => {
     if (!dueFilters.course) return [1, 2, 3, 4, 5, 6, 7, 8];
 
-    const selectedCourse = courses.find(c => (c.displayName || c.name) === dueFilters.course);
+    const selectedCourse = courses.find(c => String(c.id) === String(dueFilters.course) || (c.displayName || c.name) === dueFilters.course);
     if (!selectedCourse) return [1, 2, 3, 4, 5, 6, 7, 8];
 
     if (dueFilters.branch) {
@@ -397,7 +428,7 @@ const StudentDue = ({ currentUser }) => {
       courses.forEach(c => (c.branches || []).forEach(b => branches.add(typeof b === 'object' ? b.name : b)));
       return Array.from(branches).sort();
     }
-    const selectedCourse = courses.find(c => (c.displayName || c.name) === dueFilters.course);
+    const selectedCourse = courses.find(c => String(c.id) === String(dueFilters.course) || (c.displayName || c.name) === dueFilters.course);
     return (selectedCourse?.branches || []).map(b => typeof b === 'object' ? b.name : b).sort();
   }, [courses, dueFilters.course]);
 
@@ -408,7 +439,7 @@ const StudentDue = ({ currentUser }) => {
       courses.forEach(c => (c.years || []).forEach(y => years.add(y)));
       return years.size === 0 ? [1, 2, 3, 4] : Array.from(years).sort((a, b) => a - b);
     }
-    const selectedCourse = courses.find(c => (c.displayName || c.name) === reportFilters.course);
+    const selectedCourse = courses.find(c => String(c.id) === String(reportFilters.course) || (c.displayName || c.name) === reportFilters.course);
     if (!selectedCourse) return [1, 2, 3, 4];
     if (reportFilters.branch) {
       const selectedBranch = selectedCourse.branches?.find(b => b.name === reportFilters.branch);
@@ -419,7 +450,7 @@ const StudentDue = ({ currentUser }) => {
 
   const reportSemesterOptions = useMemo(() => {
     if (!reportFilters.course) return [1, 2, 3, 4, 5, 6, 7, 8];
-    const selectedCourse = courses.find(c => (c.displayName || c.name) === reportFilters.course);
+    const selectedCourse = courses.find(c => String(c.id) === String(reportFilters.course) || (c.displayName || c.name) === reportFilters.course);
     if (!selectedCourse) return [1, 2, 3, 4, 5, 6, 7, 8];
     if (reportFilters.branch) {
       const selectedBranch = selectedCourse.branches?.find(b => b.name === reportFilters.branch);
@@ -434,7 +465,7 @@ const StudentDue = ({ currentUser }) => {
       courses.forEach(c => (c.branches || []).forEach(b => branches.add(typeof b === 'object' ? b.name : b)));
       return Array.from(branches).sort();
     }
-    const selectedCourse = courses.find(c => (c.displayName || c.name) === reportFilters.course);
+    const selectedCourse = courses.find(c => String(c.id) === String(reportFilters.course) || (c.displayName || c.name) === reportFilters.course);
     return (selectedCourse?.branches || []).map(b => typeof b === 'object' ? b.name : b).sort();
   }, [courses, reportFilters.course]);
 
@@ -457,7 +488,8 @@ const StudentDue = ({ currentUser }) => {
 
   const kitOptions = useMemo(() => {
     // If filters are selected, show kits that match those filters
-    const selectedCourse = normalizeValue(dueFilters.course);
+    const selectedCourseObj = courses.find(c => String(c.id) === String(dueFilters.course) || (c.displayName || c.name) === dueFilters.course);
+    const selectedCourse = normalizeValue(selectedCourseObj ? selectedCourseObj.name : dueFilters.course);
     const selectedYear = Number(dueFilters.year);
     const selectedBranch = dueFilters.branch ? normalizeValue(dueFilters.branch) : null;
     const selectedSemester = dueFilters.semester ? Number(dueFilters.semester) : null;
@@ -485,7 +517,8 @@ const StudentDue = ({ currentUser }) => {
 
   const reportKitOptions = useMemo(() => {
     // Replicate same logic for report filters
-    const selectedCourse = normalizeValue(reportFilters.course);
+    const selectedCourseObj = courses.find(c => String(c.id) === String(reportFilters.course) || (c.displayName || c.name) === reportFilters.course);
+    const selectedCourse = normalizeValue(selectedCourseObj ? selectedCourseObj.name : reportFilters.course);
     const selectedYear = Number(reportFilters.year);
     const selectedBranch = reportFilters.branch ? normalizeValue(reportFilters.branch) : null;
     const selectedSemester = reportFilters.semester ? Number(reportFilters.semester) : null;
@@ -514,7 +547,8 @@ const StudentDue = ({ currentUser }) => {
 
   const filteredDueStudents = useMemo(() => {
     const searchValue = dueFilters.search.trim().toLowerCase();
-    const selectedCourse = normalizeValue(dueFilters.course);
+    const selectedCourseObj = courses.find(c => String(c.id) === String(dueFilters.course) || (c.displayName || c.name) === dueFilters.course);
+    const selectedCourse = normalizeValue(selectedCourseObj ? selectedCourseObj.name : dueFilters.course);
     const selectedYear = Number(dueFilters.year);
     const selectedBranch = dueFilters.branch ? normalizeValue(dueFilters.branch) : null;
     const selectedSemester = dueFilters.semester ? Number(dueFilters.semester) : null;
@@ -1039,8 +1073,8 @@ const StudentDue = ({ currentUser }) => {
               className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white shadow-sm w-full lg:w-auto"
             >
               <option value="">Select Course</option>
-              {courseOptions.map(course => (
-                <option key={course} value={course}>{course.toUpperCase()}</option>
+              {courseOptions.map(c => (
+                <option key={c.value || c.id} value={c.value || c.id}>{(c.displayLabel || c.name || c).toUpperCase()}</option>
               ))}
             </select>
 
@@ -1460,8 +1494,8 @@ const StudentDue = ({ currentUser }) => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   >
                     <option value="">All Courses</option>
-                    {courseOptions.map(course => (
-                      <option key={course} value={course}>{course.toUpperCase()}</option>
+                    {courseOptions.map(c => (
+                      <option key={c.value || c.id} value={c.value || c.id}>{(c.displayLabel || c.name || c).toUpperCase()}</option>
                     ))}
                   </select>
                 </div>
