@@ -14,42 +14,42 @@ const TableSkeleton = () => (
   <table className="w-full text-left border-collapse">
     <thead>
       <tr className="bg-gray-50 border-b border-gray-200 text-xs uppercase text-gray-500 tracking-wider">
-        <th className="px-6 py-3 font-semibold">Student Name</th>
-        <th className="px-6 py-3 font-semibold">Admission No</th>
-        <th className="px-6 py-3 font-semibold">PIN</th>
-        <th className="px-6 py-3 font-semibold">Course</th>
-        <th className="px-6 py-3 font-semibold">Year</th>
-        <th className="px-6 py-3 font-semibold">Semester</th>
-        <th className="px-6 py-3 font-semibold">Branch</th>
-        <th className="px-6 py-3 font-semibold">Status</th>
+        <th className="px-4 py-2.5 font-semibold">Student Name</th>
+        <th className="px-4 py-2.5 font-semibold">Admission No</th>
+        <th className="px-4 py-2.5 font-semibold">PIN</th>
+        <th className="px-4 py-2.5 font-semibold">Course</th>
+        <th className="px-4 py-2.5 font-semibold">Year</th>
+        <th className="px-4 py-2.5 font-semibold">Semester</th>
+        <th className="px-4 py-2.5 font-semibold">Branch</th>
+        <th className="px-4 py-2.5 font-semibold">Status</th>
       </tr>
     </thead>
-    <tbody className="divide-y divide-gray-100 animate-pulse">
+    <tbody className="divide-y divide-gray-100 animate-pulse text-xs">
       {[...Array(6)].map((_, i) => (
         <tr key={i} className="hover:bg-gray-50">
-          <td className="px-6 py-4">
-            <div className="h-4 bg-gray-200 rounded w-36"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-3.5 bg-gray-200 rounded w-36"></div>
           </td>
-          <td className="px-6 py-4">
-            <div className="h-4 bg-gray-200 rounded w-24"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-3.5 bg-gray-200 rounded w-24"></div>
           </td>
-          <td className="px-6 py-4">
-            <div className="h-4 bg-gray-200 rounded w-20"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-3.5 bg-gray-200 rounded w-20"></div>
           </td>
-          <td className="px-6 py-4">
-            <div className="h-5 bg-indigo-100 rounded-full w-16"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-4 bg-indigo-100 rounded w-16"></div>
           </td>
-          <td className="px-6 py-4">
-            <div className="h-4 bg-gray-200 rounded w-8"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-3.5 bg-gray-200 rounded w-8"></div>
           </td>
-          <td className="px-6 py-4">
-            <div className="h-4 bg-gray-200 rounded w-8"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-3.5 bg-gray-200 rounded w-8"></div>
           </td>
-          <td className="px-6 py-4">
-            <div className="h-4 bg-gray-200 rounded w-24"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-3.5 bg-gray-200 rounded w-24"></div>
           </td>
-          <td className="px-6 py-4">
-            <div className="h-5 bg-gray-200 rounded-full w-16"></div>
+          <td className="px-4 py-2.5">
+            <div className="h-4 bg-gray-200 rounded w-16"></div>
           </td>
         </tr>
       ))}
@@ -585,42 +585,42 @@ const StudentDashboard = ({ currentUser }) => {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200 text-xs uppercase text-gray-500 tracking-wider">
-                    <th className="px-6 py-3 font-semibold">Student Name</th>
-                    <th className="px-6 py-3 font-semibold">Admission No</th>
-                    <th className="px-6 py-3 font-semibold">PIN</th>
-                    <th className="px-6 py-3 font-semibold">Course</th>
-                    <th className="px-6 py-3 font-semibold">Year</th>
-                    <th className="px-6 py-3 font-semibold">Semester</th>
-                    <th className="px-6 py-3 font-semibold">Branch</th>
-                    <th className="px-6 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-2.5 font-semibold">Student Name</th>
+                    <th className="px-4 py-2.5 font-semibold">Admission No</th>
+                    <th className="px-4 py-2.5 font-semibold">PIN</th>
+                    <th className="px-4 py-2.5 font-semibold">Course</th>
+                    <th className="px-4 py-2.5 font-semibold">Year</th>
+                    <th className="px-4 py-2.5 font-semibold">Semester</th>
+                    <th className="px-4 py-2.5 font-semibold">Branch</th>
+                    <th className="px-4 py-2.5 font-semibold">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className="divide-y divide-gray-100 text-xs">
                   {displayStudents.map((student) => (
                     <tr
                       key={student.id}
                       onClick={() => navigate(`/student/${student.id}`)}
-                      className="hover:bg-blue-50 transition-colors group cursor-pointer"
+                      className="hover:bg-blue-50/70 transition-colors group cursor-pointer"
                     >
-                      <td className="px-6 py-4 font-medium text-gray-900">{student.name}</td>
-                      <td className="px-6 py-4 text-gray-600">{student.studentId}</td>
-                      <td className="px-6 py-4 text-gray-600">{student.pin || '-'}</td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                      <td className="px-4 py-2.5 font-medium text-gray-900">{student.name}</td>
+                      <td className="px-4 py-2.5 text-gray-600">{student.studentId}</td>
+                      <td className="px-4 py-2.5 text-gray-600 font-mono text-[11px]">{student.pin || '-'}</td>
+                      <td className="px-4 py-2.5">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-indigo-50 text-indigo-700 border border-indigo-100">
                           {student.course}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-gray-600">{student.year}</td>
-                      <td className="px-6 py-4 text-gray-600">{student.semester || '-'}</td>
-                      <td className="px-6 py-4 text-gray-600">{student.branch}</td>
-                      <td className="px-6 py-4">
+                      <td className="px-4 py-2.5 text-gray-600">{student.year}</td>
+                      <td className="px-4 py-2.5 text-gray-600">{student.semester || '-'}</td>
+                      <td className="px-4 py-2.5 text-gray-600">{student.branch}</td>
+                      <td className="px-4 py-2.5">
                         {student.status ? (
-                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            student.status?.toLowerCase() === 'active' ? 'bg-green-100 text-green-800' :
-                            student.status?.toLowerCase() === 'inactive' ? 'bg-gray-100 text-gray-800' :
-                            student.status?.toLowerCase() === 'graduated' ? 'bg-blue-100 text-blue-800' :
-                            student.status?.toLowerCase() === 'cancelled' ? 'bg-red-100 text-red-800' :
-                            'bg-yellow-100 text-yellow-800'
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${
+                            student.status?.toLowerCase() === 'active' ? 'bg-green-50 text-green-700 border border-green-200' :
+                            student.status?.toLowerCase() === 'inactive' ? 'bg-gray-50 text-gray-700 border border-gray-200' :
+                            student.status?.toLowerCase() === 'graduated' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                            student.status?.toLowerCase() === 'cancelled' ? 'bg-red-50 text-red-700 border border-red-200' :
+                            'bg-yellow-50 text-yellow-700 border border-yellow-200'
                           }`}>
                             {student.status}
                           </span>
