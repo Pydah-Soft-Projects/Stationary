@@ -188,43 +188,7 @@ const Dashboard = () => {
         </div>
 
         {/* Key Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {/* Total Students */}
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                <Users size={24} />
-              </div>
-              <TrendingUp size={20} className="opacity-80" />
-            </div>
-            <div className="text-3xl font-bold mb-1">
-              {loading ? (
-                <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              ) : (
-                (stats?.totalStudents || 0).toLocaleString()
-              )}
-            </div>
-            <div className="text-blue-100 text-sm font-medium">Total Students</div>
-          </div>
-
-          {/* Total Transactions */}
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center">
-                <ShoppingCart size={24} />
-              </div>
-              <Activity size={20} className="opacity-80" />
-            </div>
-            <div className="text-3xl font-bold mb-1">
-              {loading ? (
-                <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              ) : (
-                (stats?.totalTransactions || 0).toLocaleString()
-              )}
-            </div>
-            <div className="text-purple-100 text-sm font-medium">Total Transactions</div>
-          </div>
-
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           {/* Total Revenue */}
           <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg hover:shadow-xl transition-shadow">
             <div className="flex items-center justify-between mb-4">

@@ -1,16 +1,32 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, PlusCircle, Users, List, Settings, LogOut, ChevronLeft, ChevronRight, Menu, UserPlus, X, User, GraduationCap, Receipt, ClipboardList, ClipboardCheck, ArrowRightLeft, ShoppingCart, Briefcase, TrendingUp } from 'lucide-react';
+import { Home, PlusCircle, Users, List, Settings, LogOut, ChevronLeft, ChevronRight, Menu, UserPlus, X, User, GraduationCap, Receipt, ClipboardList, ClipboardCheck, ArrowRightLeft, ShoppingCart, Briefcase, TrendingUp, ShieldCheck } from 'lucide-react';
 import { hasViewAccess } from './utils/permissions';
 import { apiUrl } from './utils/api';
 
 const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen, currentUser }) => {
   const location = useLocation();
+  const isSuperAdmin = currentUser?.role === 'Administrator' || currentUser?.name === 'superadmin' || currentUser?.name === 'Administrator';
   const [employeeName, setEmployeeName] = useState(
-    currentUser?.employeeName || currentUser?.employee_name || null
+    isSuperAdmin ? 'Administrator' : (currentUser?.employeeName || currentUser?.employee_name || null)
   );
 
   useEffect(() => {
+    if (isSuperAdmin) {
+      setEmployeeName('Administrator');
+      try {
+        const saved = JSON.parse(localStorage.getItem('currentUser') || '{}');
+        if (saved && (saved.employeeName || saved.employee_name || saved.empNo)) {
+          delete saved.employeeName;
+          delete saved.employee_name;
+          delete saved.empNo;
+          saved.name = 'Administrator';
+          localStorage.setItem('currentUser', JSON.stringify(saved));
+        }
+      } catch (e) {}
+      return;
+    }
+
     if (currentUser?.employeeName || currentUser?.employee_name) {
       setEmployeeName(currentUser.employeeName || currentUser.employee_name);
       return;
@@ -42,7 +58,7 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
 
       return () => { isMounted = false; };
     }
-  }, [currentUser]);
+  }, [currentUser, isSuperAdmin]);
 
   // Close sidebar when clicking outside on mobile
   useEffect(() => {
@@ -59,8 +75,7 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
     }
   }, [isMobileProp, sidebarOpen, setSidebarOpen]);
 
-  // Check if current user is super admin
-  const isSuperAdmin = currentUser?.role === 'Administrator';
+  // Sub admin check
   const isSubAdmin = !isSuperAdmin && currentUser?.role;
   const subAdminPermissions = currentUser?.permissions || [];
 
@@ -79,6 +94,7 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
     { path: '/profit-report', label: 'Profit Report', icon: TrendingUp, permissionKey: 'profit-report' },
     { path: '/student-due', label: 'Student Due', icon: ClipboardList, permissionKeys: ['student-due', 'reports-daily', 'reports-monthly', 'reports-stock', 'transactions'] },
     { path: '/audit-logs', label: 'Audit Logs', icon: ClipboardCheck, permissionKeys: ['audit-log-entry', 'audit-log-approval', 'audit-logs'] },
+    { path: '/user-audits', label: 'User Audit', icon: ShieldCheck, superAdminOnly: true },
     { path: '/settings', label: 'Settings', icon: Settings, permissionKey: 'settings' },
   ];
 
@@ -209,8 +225,8 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
                   </div>
                   <div className="flex items-center justify-between gap-3 flex-1 min-w-0">
                     <div className="flex flex-col leading-tight flex-1 min-w-0">
-                      <span className="font-semibold text-sm truncate" title={employeeName || currentUser.employeeName || currentUser.employee_name || currentUser.name}>
-                        {employeeName || currentUser.employeeName || currentUser.employee_name || currentUser.name}
+                      <span className="font-semibold text-sm truncate" title={isSuperAdmin ? 'Administrator' : (employeeName || currentUser.employeeName || currentUser.employee_name || currentUser.name)}>
+                        {isSuperAdmin ? 'Administrator' : (employeeName || currentUser.employeeName || currentUser.employee_name || currentUser.name)}
                       </span>
                       <span className="text-xs text-slate-300 truncate">
                         {isSuperAdmin ? 'Administrator' : 'Sub-Administrator'}

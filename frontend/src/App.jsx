@@ -122,7 +122,20 @@ function App() {
   // Initialize isAuthenticated from localStorage
   const [currentUser, setCurrentUser] = useState(() => {
     const savedUser = localStorage.getItem('currentUser');
-    return savedUser ? JSON.parse(savedUser) : null;
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        if (parsed?.role === 'Administrator' || parsed?.name === 'superadmin') {
+          delete parsed.employeeName;
+          delete parsed.employee_name;
+          parsed.name = 'Administrator';
+          parsed.empNo = null;
+          localStorage.setItem('currentUser', JSON.stringify(parsed));
+        }
+        return parsed;
+      } catch (e) {}
+    }
+    return null;
   });
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     const savedToken = localStorage.getItem('authToken');
@@ -382,17 +395,18 @@ function App() {
 
       const data = await res.json();
       const token = data.token || `local-${data._id}`;
+      const isSuper = data.role === 'Administrator' || data.name === 'superadmin';
       const userData = {
-        name: data.name,
-        employeeName: data.employeeName || data.employee_name || null,
-        employee_name: data.employee_name || data.employeeName || null,
-        empNo: data.empNo || data.emp_no || null,
-        emp_no: data.emp_no || data.empNo || null,
-        role: data.role || 'Editor',
+        name: isSuper ? 'Administrator' : data.name,
+        employeeName: isSuper ? 'Administrator' : (data.employeeName || data.employee_name || null),
+        employee_name: isSuper ? 'Administrator' : (data.employee_name || data.employeeName || null),
+        empNo: isSuper ? null : (data.empNo || data.emp_no || null),
+        emp_no: isSuper ? null : (data.emp_no || data.empNo || null),
+        role: data.role || (isSuper ? 'Administrator' : 'Editor'),
         id: data._id,
         permissions: data.permissions || [],
         assignedCollege: data.assignedCollege || data.assignedBranch || null,
-        assignedBranch: data.assignedCollege || data.assignedBranch || null, // Keep for backward compatibility
+        assignedBranch: data.assignedCollege || data.assignedBranch || null,
       };
 
       setCurrentUser(userData);
@@ -734,6 +748,14 @@ function App() {
                     element={
                       <ProtectedRoute currentUser={currentUser} requiredPermissions={['audit-log-entry', 'audit-log-approval', 'audit-logs']}>
                         <AuditLogs currentUser={currentUser} />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/user-audits"
+                    element={
+                      <ProtectedRoute currentUser={currentUser} requiredPermissions={['audit-log-entry', 'audit-log-approval', 'audit-logs', 'dashboard']}>
+                        <AuditLogs currentUser={currentUser} initialTab="user-audit" />
                       </ProtectedRoute>
                     }
                   />

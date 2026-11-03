@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { SubAdmin } = require('../models/subAdminModel');
+const { UserAudit } = require('../models/auditLogModel');
 
 const CRM_AUTH_URL = process.env.CRM_AUTH_URL || 'https://crm.pydah.edu.in';
 const JWT_SECRET = process.env.JWT_SECRET || 'stationary-secret-key';
@@ -225,9 +226,9 @@ const ssoLogin = async (req, res) => {
       subAdmin = new SubAdmin({
         name: assignedName,
         empNo: ssoUser.empNo ? String(ssoUser.empNo).trim() : null,
-        password: `sso_${Date.now()}_${Math.random().toString(36).substring(7)}`, // Hashed by subAdminSchema pre-save hook
-        role: 'Editor', // Use internal Stationary role (never external CRM role)
-        permissions: ['dashboard:view'], // Grant basic dashboard view
+        password: `sso_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        role: 'Editor',
+        permissions: ['dashboard:view'],
         assignedCollege: ssoUser.assignedCollege || null,
         assignedBranch: ssoUser.assignedBranch || null
       });
@@ -240,7 +241,6 @@ const ssoLogin = async (req, res) => {
         subAdmin.empNo = String(ssoUser.empNo).trim();
         modified = true;
       }
-      // Sanitize legacy 'faculty' or empty role to internal 'Editor'
       if (!subAdmin.role || subAdmin.role === 'faculty' || subAdmin.role.toLowerCase() === 'faculty') {
         console.log(`[SSO Backend] Normalizing role from "${subAdmin.role}" to "Editor"`);
         subAdmin.role = 'Editor';
@@ -267,6 +267,26 @@ const ssoLogin = async (req, res) => {
       permissions: subAdmin.permissions,
       assignedCollege: subAdmin.assignedCollege
     });
+
+    // Record login event in UserAudit
+    try {
+      await UserAudit.create({
+        userId: subAdmin._id,
+        userName: subAdmin.name,
+        empNo: subAdmin.empNo || ssoUser.empNo || '',
+        userRole: subAdmin.role || 'Editor',
+        college: subAdmin.assignedCollege?._id || subAdmin.assignedCollege || null,
+        collegeName: subAdmin.assignedCollege?.name || '',
+        event: 'login',
+        action: 'SSO Login via Pydah CRM',
+        description: `${subAdmin.name} (${subAdmin.role || 'Editor'}) logged in via Unified SSO Gateway`,
+        loginTime: new Date(),
+        ip: req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '',
+        userAgent: req.headers['user-agent'] || '',
+        status: 'success',
+        details: { method: 'Pydah SSO Gateway', portalId: ssoUser.portalId, email: ssoUser.email }
+      });
+    } catch (_) {}
 
     console.log('[SSO Backend] 🎉 [SUCCESS] SSO Login complete in', Date.now() - reqStart, 'ms. Returning 200 OK.');
     console.log('----------------------------------------------------');

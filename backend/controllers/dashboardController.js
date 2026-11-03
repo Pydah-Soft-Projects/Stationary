@@ -24,7 +24,8 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     try {
       // For now, only total count is feasible without complex dues join here
       // We can add "paid" vs "unpaid" if we have a way to track it efficiently in SQL
-      const [rows] = await pool.query(`SELECT COUNT(*) as total FROM \`${tableName}\``);
+      // Only count active students - passed out / course completed students are excluded
+      const [rows] = await pool.query(`SELECT COUNT(id) as total FROM \`${tableName}\` WHERE student_status IN ('Regular', 'Re-Joined', 'Rejoined')`);
       totalStudents = rows[0]?.total || 0;
     } catch (err) {
       console.error('MySQL Dashboard Error:', err);

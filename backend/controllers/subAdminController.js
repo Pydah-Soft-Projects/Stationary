@@ -1,7 +1,292 @@
 const asyncHandler = require('express-async-handler');
 const bcrypt = require('bcryptjs');
-const { SubAdmin } = require('../models/subAdminModel');
+const { SubAdmin, Role } = require('../models/subAdminModel');
+const { UserAudit } = require('../models/auditLogModel');
 const { getEmployeeConnection, connectEmployeeDB } = require('../config/employeeDb');
+
+// System default roles
+const DEFAULT_SYSTEM_ROLES = [
+  {
+    roleKey: 'Administrator',
+    label: 'Administrator',
+    description: 'Full system access with complete administrative privileges across all modules, settings, and branches',
+    isSystem: true,
+    permissions: [
+      'dashboard:full',
+      'course-dashboard:full',
+      'employee-dashboard:full',
+      'stock-products:full',
+      'stock-add:full',
+      'stock-entries:full',
+      'stock-vendors:full',
+      'stock-transfers:full',
+      'reports-daily:full',
+      'reports-monthly:full',
+      'reports-stock:full',
+      'profit-report:full',
+      'student-due:full',
+      'audit-log-entry:full',
+      'audit-log-approval:full',
+      'settings:full'
+    ]
+  },
+  {
+    roleKey: 'Editor',
+    label: 'Editor',
+    description: 'Standard editor role with permissions for managing academic stock, transfers, and viewing reports.',
+    isSystem: true,
+    permissions: [
+      'dashboard:view',
+      'course-dashboard:view',
+      'employee-dashboard:view',
+      'stock-products:full',
+      'stock-add:full',
+      'stock-entries:full',
+      'stock-vendors:full',
+      'stock-transfers:full',
+      'reports-daily:view',
+      'reports-monthly:view',
+      'reports-stock:view',
+      'student-due:view'
+    ]
+  },
+  {
+    roleKey: 'Viewer',
+    label: 'Viewer',
+    description: 'Read-only access across allowed dashboards, stock records, and transaction reports.',
+    isSystem: true,
+    permissions: [
+      'dashboard:view',
+      'course-dashboard:view',
+      'employee-dashboard:view',
+      'stock-entries:view',
+      'stock-transfers:view',
+      'reports-daily:view',
+      'reports-monthly:view',
+      'reports-stock:view'
+    ]
+  }
+];
+
+// Helper to seed/ensure default system roles exist in DB
+const ensureSystemRoles = async () => {
+  try {
+    for (const def of DEFAULT_SYSTEM_ROLES) {
+      const existing = await Role.findOne({ 
+        $or: [
+          { roleKey: def.roleKey },
+          { roleKey: def.roleKey.toLowerCase() },
+          { label: { $regex: `^${def.label}$`, $options: 'i' } }
+        ]
+      });
+      if (!existing) {
+        await Role.create(def);
+      }
+    }
+  } catch (err) {
+    console.error('Error ensuring system roles:', err.message);
+  }
+};
+
+// GET /api/roles
+const listRoles = asyncHandler(async (req, res) => {
+  await ensureSystemRoles();
+  const roles = await Role.find({}).sort({ isSystem: -1, createdAt: 1 });
+  
+  // Also count how many users currently have each role
+  const subadmins = await SubAdmin.find({}).select('role');
+  const roleCounts = {};
+  subadmins.forEach(sa => {
+    if (sa.role) {
+      const rKey = sa.role.trim();
+      roleCounts[rKey] = (roleCounts[rKey] || 0) + 1;
+      const rLower = rKey.toLowerCase();
+      if (rLower !== rKey) {
+        roleCounts[rLower] = (roleCounts[rLower] || 0) + 1;
+      }
+    }
+  });
+
+  const formatted = roles.map(r => ({
+    _id: r._id,
+    roleKey: r.roleKey,
+    label: r.label,
+    description: r.description || '',
+    permissions: r.permissions || [],
+    isSystem: !!r.isSystem,
+    userCount: roleCounts[r.roleKey] || roleCounts[r.label] || 0,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt
+  }));
+
+  res.json(formatted);
+});
+
+// POST /api/roles
+const createRole = asyncHandler(async (req, res) => {
+  const { roleKey, label, description, permissions } = req.body;
+  if (!label || !String(label).trim()) {
+    res.status(400);
+    throw new Error('Role name is required');
+  }
+
+  const cleanLabel = String(label).trim();
+  const slug = cleanLabel.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  const cleanKey = (roleKey && String(roleKey).trim()) ? String(roleKey).trim() : slug;
+
+  if (!cleanKey || cleanKey.length < 2) {
+    res.status(400);
+    throw new Error('Valid role key or name is required (minimum 2 characters)');
+  }
+
+  // Check if role key or label already exists
+  const existing = await Role.findOne({
+    $or: [
+      { roleKey: cleanKey },
+      { roleKey: { $regex: `^${cleanKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } },
+      { label: { $regex: `^${cleanLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } }
+    ]
+  });
+
+  if (existing) {
+    res.status(400);
+    throw new Error('A role with this name or key already exists');
+  }
+
+  const created = await Role.create({
+    roleKey: cleanKey,
+    label: cleanLabel,
+    description: description ? String(description).trim() : '',
+    permissions: Array.isArray(permissions) ? permissions : [],
+    isSystem: false
+  });
+
+  try {
+    await UserAudit.create({
+      userName: 'Administrator',
+      event: 'user_management',
+      action: 'Role Created',
+      description: `Created new custom role: ${cleanLabel} (${cleanKey})`,
+      status: 'success',
+      details: { roleKey: cleanKey, label: cleanLabel, description }
+    });
+  } catch (err) {}
+
+  res.status(201).json({
+    _id: created._id,
+    roleKey: created.roleKey,
+    label: created.label,
+    description: created.description,
+    permissions: created.permissions,
+    isSystem: false,
+    userCount: 0
+  });
+});
+
+// PUT /api/roles/:roleKey
+const updateRole = asyncHandler(async (req, res) => {
+  const { roleKey } = req.params;
+  const { label, description, permissions } = req.body;
+
+  const role = await Role.findOne({
+    $or: [
+      { roleKey },
+      { _id: roleKey.match(/^[0-9a-fA-F]{24}$/) ? roleKey : null }
+    ]
+  });
+
+  if (!role) {
+    res.status(404);
+    throw new Error('Role not found');
+  }
+
+  if (label && String(label).trim()) {
+    role.label = String(label).trim();
+  }
+
+  if (description !== undefined) {
+    role.description = String(description).trim();
+  }
+
+  // If role is Administrator, permissions cannot be restricted
+  if (role.roleKey === 'Administrator' || role.roleKey === 'super_admin') {
+    // Administrator retains full access
+  } else if (permissions !== undefined) {
+    role.permissions = Array.isArray(permissions) ? permissions : [];
+  }
+
+  const saved = await role.save();
+
+  try {
+    await UserAudit.create({
+      userName: 'Administrator',
+      event: 'user_management',
+      action: 'Role Configured',
+      description: `Updated role configuration for ${saved.label} (${saved.roleKey})`,
+      status: 'success',
+      details: { roleKey: saved.roleKey, label: saved.label, permissionsCount: saved.permissions?.length }
+    });
+  } catch (err) {}
+
+  res.json({
+    _id: saved._id,
+    roleKey: saved.roleKey,
+    label: saved.label,
+    description: saved.description,
+    permissions: saved.permissions,
+    isSystem: saved.isSystem
+  });
+});
+
+// DELETE /api/roles/:roleKey
+const deleteRole = asyncHandler(async (req, res) => {
+  const { roleKey } = req.params;
+
+  const role = await Role.findOne({
+    $or: [
+      { roleKey },
+      { _id: roleKey.match(/^[0-9a-fA-F]{24}$/) ? roleKey : null }
+    ]
+  });
+
+  if (!role) {
+    res.status(404);
+    throw new Error('Role not found');
+  }
+
+  if (role.isSystem || ['Administrator', 'Editor', 'Viewer'].includes(role.roleKey)) {
+    res.status(400);
+    throw new Error('System roles cannot be deleted');
+  }
+
+  // Check if any subAdmin is currently using this role
+  const assignedUsersCount = await SubAdmin.countDocuments({
+    $or: [
+      { role: role.roleKey },
+      { role: role.label }
+    ]
+  });
+
+  if (assignedUsersCount > 0) {
+    res.status(400);
+    throw new Error(`Cannot delete role "${role.label}" because ${assignedUsersCount} user(s) are currently assigned to it. Please reassign those users first.`);
+  }
+
+  await Role.findByIdAndDelete(role._id);
+
+  try {
+    await UserAudit.create({
+      userName: 'Administrator',
+      event: 'user_management',
+      action: 'Role Deleted',
+      description: `Deleted custom role: ${role.label} (${role.roleKey})`,
+      status: 'warning',
+      details: { roleKey: role.roleKey, label: role.label }
+    });
+  } catch (err) {}
+
+  res.json({ message: `Role "${role.label}" deleted successfully` });
+});
 
 // GET /api/subadmins
 const listSubAdmins = asyncHandler(async (req, res) => {
@@ -21,6 +306,19 @@ const listSubAdmins = asyncHandler(async (req, res) => {
     const college = sa.assignedCollege || sa.assignedBranch;
     let employeeName = null;
     let empNo = sa.empNo || null;
+
+    if (sa.role === 'Administrator' || sa.name === 'superadmin') {
+      return { 
+        _id: sa._id, 
+        name: 'Administrator', 
+        empNo: null,
+        employeeName: 'Administrator',
+        role: 'Administrator', 
+        permissions: sa.permissions || [], 
+        assignedCollege: college,
+        assignedBranch: college
+      };
+    }
 
     if (conn) {
       try {
@@ -47,7 +345,7 @@ const listSubAdmins = asyncHandler(async (req, res) => {
       role: sa.role, 
       permissions: sa.permissions || [], 
       assignedCollege: college,
-      assignedBranch: college // Keep for frontend compatibility
+      assignedBranch: college
     };
   }));
 
@@ -58,7 +356,6 @@ const listSubAdmins = asyncHandler(async (req, res) => {
 const createSubAdmin = asyncHandler(async (req, res) => {
   const { name, empNo, password, role, permissions, assignedCollege, assignedBranch } = req.body;
   
-  // Accept either assignedCollege or assignedBranch (legacy)
   const targetCollege = assignedCollege || assignedBranch;
 
   if (!name && !empNo) {
@@ -150,6 +447,22 @@ const createSubAdmin = asyncHandler(async (req, res) => {
       }
     } catch (err) {}
   }
+
+  try {
+    await UserAudit.create({
+      userId: created._id,
+      userName: created.name,
+      empNo: resolvedEmpNo || '',
+      userRole: created.role || 'Editor',
+      college: created.assignedCollege?._id || created.assignedCollege || null,
+      collegeName: created.assignedCollege?.name || '',
+      event: 'user_management',
+      action: 'User Account Created',
+      description: `Created user ${created.name} (${created.role || 'Editor'}) with college ${created.assignedCollege?.name || 'Global'}`,
+      status: 'success',
+      details: { name: created.name, role: created.role, empNo: resolvedEmpNo }
+    });
+  } catch (err) {}
   
   res.status(201).json({ 
     _id: created._id, 
@@ -175,12 +488,11 @@ const updateSubAdmin = asyncHandler(async (req, res) => {
   if (name) sub.name = name;
   if (empNo !== undefined) sub.empNo = empNo ? String(empNo).trim() : null;
   if (role) sub.role = role;
-  if (password) sub.password = password; // will be hashed by pre-save
+  if (password) sub.password = password;
   if (permissions !== undefined) sub.permissions = permissions;
   
-  // Check both new and old field names
   if (assignedCollege !== undefined) sub.assignedCollege = assignedCollege;
-  else if (assignedBranch !== undefined) sub.assignedCollege = assignedBranch; // Legacy support
+  else if (assignedBranch !== undefined) sub.assignedCollege = assignedBranch;
 
   const saved = await sub.save();
   await saved.populate('assignedCollege', 'name');
@@ -210,6 +522,22 @@ const updateSubAdmin = asyncHandler(async (req, res) => {
     } catch (err) {}
   }
 
+  try {
+    await UserAudit.create({
+      userId: saved._id,
+      userName: saved.name,
+      empNo: resolvedEmpNo || '',
+      userRole: saved.role || 'Editor',
+      college: saved.assignedCollege?._id || saved.assignedCollege || null,
+      collegeName: saved.assignedCollege?.name || '',
+      event: 'user_management',
+      action: 'User Access / Role Updated',
+      description: `Updated access features for user ${saved.name} (Role: ${saved.role})`,
+      status: 'success',
+      details: { name: saved.name, role: saved.role, empNo: resolvedEmpNo }
+    });
+  } catch (err) {}
+
   res.json({ 
     _id: saved._id, 
     name: saved.name, 
@@ -231,6 +559,20 @@ const deleteSubAdmin = asyncHandler(async (req, res) => {
     throw new Error('User not found');
   }
   await SubAdmin.findByIdAndDelete(id);
+
+  try {
+    await UserAudit.create({
+      userName: sub.name,
+      empNo: sub.empNo || '',
+      userRole: sub.role || 'Editor',
+      event: 'user_management',
+      action: 'User Deleted',
+      description: `Deleted portal user ${sub.name} (${sub.role})`,
+      status: 'warning',
+      details: { name: sub.name, role: sub.role }
+    });
+  } catch (err) {}
+
   res.json({ message: 'Deleted' });
 });
 
@@ -263,7 +605,11 @@ const loginSubAdmin = asyncHandler(async (req, res) => {
       if (!conn) {
         try { conn = await connectEmployeeDB(); } catch (e) {}
       }
-      if (conn) {
+
+      if (sub.role === 'Administrator' || sub.name === 'superadmin') {
+        employeeName = 'Administrator';
+        empNo = null;
+      } else if (conn) {
         try {
           const searchKey = String(sub.empNo || sub.name || '').trim();
           const escaped = searchKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -279,6 +625,29 @@ const loginSubAdmin = asyncHandler(async (req, res) => {
           }
         } catch (err) {}
       }
+
+      // Record successful login audit in UserAudit
+      try {
+        await UserAudit.create({
+          userId: sub._id,
+          userName: employeeName || sub.name,
+          empNo: empNo || sub.empNo || '',
+          userRole: sub.role || 'Editor',
+          college: sub.assignedCollege?._id || sub.assignedCollege || null,
+          collegeName: sub.assignedCollege?.name || '',
+          event: 'login',
+          action: 'User Logged In',
+          description: `${employeeName || sub.name} (${sub.role || 'Editor'}) logged in to Stationary Management`,
+          loginTime: new Date(),
+          ip: req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '',
+          userAgent: req.headers['user-agent'] || '',
+          status: 'success',
+          details: {
+            method: 'Local Credentials',
+            empNo: empNo || sub.empNo,
+          }
+        });
+      } catch (auditErr) {}
 
       return res.json({ 
         _id: sub._id, 
@@ -325,12 +694,10 @@ const loginSubAdmin = asyncHandler(async (req, res) => {
         let isMatch = false;
         const candidatePassword = String(password).trim();
 
-        // Check plain_password
         if (emp.plain_password && String(emp.plain_password).trim() === candidatePassword) {
           isMatch = true;
         }
 
-        // Check bcrypt password hash
         if (!isMatch && emp.password) {
           try {
             isMatch = await bcrypt.compare(candidatePassword, emp.password);
@@ -340,7 +707,6 @@ const loginSubAdmin = asyncHandler(async (req, res) => {
         }
 
         if (isMatch) {
-          // If the employee is configured in the stationary database, load their configured role and permissions
           const searchConditions = [];
           if (emp.emp_no) {
             searchConditions.push({ empNo: String(emp.emp_no).trim() });
@@ -358,7 +724,6 @@ const loginSubAdmin = asyncHandler(async (req, res) => {
             .select('+password')
             .populate('assignedCollege', 'name');
 
-          // Keep local SubAdmin synced with HRMS credentials and empNo
           if (existingSub) {
             try {
               let shouldSave = false;
@@ -381,7 +746,29 @@ const loginSubAdmin = asyncHandler(async (req, res) => {
             } catch (syncErr) {}
           }
 
-          // Return user profile dynamically from DB records without exposing password
+          // Record HRMS successful login audit
+          try {
+            await UserAudit.create({
+              userId: existingSub ? existingSub._id : null,
+              userName: emp.employee_name || emp.emp_no || trimmedName,
+              empNo: emp.emp_no || trimmedName,
+              userRole: existingSub ? existingSub.role : 'Editor',
+              college: existingSub?.assignedCollege?._id || existingSub?.assignedCollege || null,
+              collegeName: existingSub?.assignedCollege?.name || '',
+              event: 'login',
+              action: 'User Logged In',
+              description: `${emp.employee_name || emp.emp_no} logged in via HRMS credentials`,
+              loginTime: new Date(),
+              ip: req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '',
+              userAgent: req.headers['user-agent'] || '',
+              status: 'success',
+              details: {
+                method: 'HRMS Authentication',
+                department: emp.department || '',
+              }
+            });
+          } catch (auditErr) {}
+
           return res.json({
             _id: existingSub ? existingSub._id : emp._id,
             name: existingSub ? existingSub.name : (emp.employee_name || emp.emp_no || trimmedName),
@@ -412,4 +799,8 @@ module.exports = {
   updateSubAdmin,
   deleteSubAdmin,
   loginSubAdmin,
+  listRoles,
+  createRole,
+  updateRole,
+  deleteRole,
 };

@@ -582,6 +582,8 @@ const StudentReceiptModal = ({
           isPaid,
           remarks,
           createdBy: currentUser?.id,
+          createdByName: currentUser?.employeeName || currentUser?.name || currentUser?.username || '',
+          createdByEmpNo: currentUser?.empNo || currentUser?.emp_no || '',
           collegeId: (currentUser?.assignedCollege && typeof currentUser.assignedCollege === 'object' ? currentUser.assignedCollege._id : currentUser?.assignedCollege) ||
             (currentUser?.assignedBranch && typeof currentUser.assignedBranch === 'object' ? currentUser.assignedBranch._id : currentUser?.assignedBranch) ||
             undefined,

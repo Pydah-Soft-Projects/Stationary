@@ -283,7 +283,7 @@ const DEFAULT_STUDENT_TABLE = 'students';
  * @access  Public
  */
 const createTransaction = asyncHandler(async (req, res) => {
-  const { studentId, employeeId, items, paymentMethod, isPaid, remarks, cashAmount, onlineAmount } = req.body;
+  const { studentId, employeeId, items, paymentMethod, isPaid, remarks, cashAmount, onlineAmount, createdBy, createdByName, createdByEmpNo } = req.body;
   let { collegeId, branchId } = req.body;
   
   // Consolidate to collegeId
@@ -592,6 +592,9 @@ const createTransaction = asyncHandler(async (req, res) => {
     stockDeducted: Boolean(isPaid && stockChanges.size > 0),
     transactionDate: new Date(),
     remarks: remarks || '',
+    createdBy: createdBy || req.user?._id || null,
+    createdByName: (createdByName || req.user?.name || '').trim(),
+    createdByEmpNo: (createdByEmpNo || req.user?.empNo || '').trim(),
     cashAmount: paymentMethod === 'split' ? (Number(cashAmount) || 0) : (paymentMethod === 'cash' ? totalAmount : 0),
     onlineAmount: paymentMethod === 'split' ? (Number(onlineAmount) || 0) : (paymentMethod === 'online' ? totalAmount : 0),
   };
@@ -603,6 +606,49 @@ const createTransaction = asyncHandler(async (req, res) => {
   }
 
   const transaction = await Transaction.create(transactionData);
+
+  // Record real-time User Activity Audit for this distribution
+  try {
+    const { UserAudit } = require('../models/auditLogModel');
+    const { College } = require('../models/collegeModel');
+    let cName = '';
+    if (targetCollegeId) {
+      const colDoc = await College.findById(targetCollegeId).select('name').lean();
+      if (colDoc) cName = colDoc.name;
+    }
+    const staffName = transactionData.createdByName || (req.user && req.user.name) || 'Staff Operator';
+    const staffId = transactionData.createdByEmpNo || (req.user && req.user.empNo) || '';
+    const recipientName = transactionType === 'employee' ? transactionEntity?.name : transactionEntity?.name;
+    const recipientId = transactionType === 'employee' ? (transactionEntity?.empNo || transactionEntity?.id) : transactionEntity?.studentId;
+
+    await UserAudit.create({
+      userId: transactionData.createdBy || null,
+      userName: staffName,
+      empNo: staffId,
+      userRole: (req.user && req.user.role) || 'Editor',
+      college: targetCollegeId || null,
+      collegeName: cName,
+      event: 'distribution',
+      action: transactionType === 'employee' ? 'Employee Stock Distribution' : 'Student Stock Distribution',
+      description: `Distributed ${validatedItems.length} item(s) to ${recipientName || 'Recipient'} (${recipientId || ''}) • ₹${totalAmount.toLocaleString('en-IN')}`,
+      loginTime: new Date(),
+      ip: req.ip || req.headers['x-forwarded-for'] || '',
+      userAgent: req.headers['user-agent'] || 'Stationary Counter Portal',
+      status: 'success',
+      details: {
+        transactionId,
+        type: transactionType,
+        recipient: recipientName,
+        recipientId,
+        paymentMethod: transactionData.paymentMethod,
+        totalAmount,
+        isPaid: transactionData.isPaid,
+        items: validatedItems.map(i => ({ name: i.name, quantity: i.quantity, price: i.price, total: i.total })),
+      }
+    });
+  } catch (auditErr) {
+    // Non-blocking
+  }
 
   // Updated student items are NOT saved to MongoDB anymore.
   // They are calculated dynamically by sqlStudentController.
