@@ -738,6 +738,14 @@ function App() {
                     }
                   />
                   <Route
+                    path="/user-audits"
+                    element={
+                      <ProtectedRoute currentUser={currentUser} requiredPermissions={['audit-log-entry', 'audit-log-approval', 'audit-logs', 'dashboard']}>
+                        <AuditLogs currentUser={currentUser} initialTab="user-audit" />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/settings"
                     element={
                       <ProtectedRoute currentUser={currentUser} requiredPermission="settings">

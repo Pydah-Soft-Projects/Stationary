@@ -424,6 +424,8 @@ const EmployeeReceiptModal = ({
                     cashAmount,
                     onlineAmount,
                     createdBy: currentUser?.id,
+                    createdByName: currentUser?.employeeName || currentUser?.name || currentUser?.username || '',
+                    createdByEmpNo: currentUser?.empNo || currentUser?.emp_no || '',
                     collegeId: (typeof currentUser?.assignedCollege === 'object' ? currentUser.assignedCollege._id : currentUser?.assignedCollege) ||
                         (typeof currentUser?.assignedBranch === 'object' ? currentUser.assignedBranch._id : currentUser?.assignedBranch) ||
                         undefined,

@@ -153,6 +153,21 @@ const transactionSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'SubAdmin',
+      default: null,
+    },
+    createdByName: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+    createdByEmpNo: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     remarks: {
       type: String,
       trim: true,

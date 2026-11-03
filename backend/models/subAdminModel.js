@@ -65,6 +65,36 @@ subAdminSchema.methods.comparePassword = async function (candidate) {
 
 const SubAdmin = mongoose.model('SubAdmin', subAdminSchema);
 
-module.exports = { SubAdmin };
+const roleSchema = new mongoose.Schema(
+  {
+    roleKey: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+    },
+    label: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    description: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    permissions: {
+      type: [String],
+      default: [],
+    },
+    isSystem: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { timestamps: true }
+);
 
+const Role = mongoose.model('Role', roleSchema);
 
+module.exports = { SubAdmin, Role };
