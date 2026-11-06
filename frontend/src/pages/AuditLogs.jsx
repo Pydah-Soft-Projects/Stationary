@@ -389,7 +389,7 @@ const AuditLogs = ({ currentUser, initialTab }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen bg-background text-text-main p-4 sm:p-6 lg:p-8">
       <div className="mx-auto space-y-6">
         {/* Top Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

@@ -275,7 +275,7 @@ const CourseManagement = ({ currentUser }) => {
   const selectedCollege = colleges.find(c => c._id === selectedCollegeId);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 flex flex-col">
+    <div className="min-h-screen bg-background text-text-main p-6 flex flex-col">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>

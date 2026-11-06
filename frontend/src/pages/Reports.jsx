@@ -2411,7 +2411,7 @@ const Reports = ({ currentUser }) => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-background text-text-main p-6">
       <div className="mx-auto">
         {/* Header with Tabs */}
         <div className="mb-8">

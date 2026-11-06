@@ -9,7 +9,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>Pydah - Stationery Management System</title>
+    <title>Campo - Stationery Management System</title>
+    <!-- Centralized Theme Runtime Loader -->
+    <script>
+      (function() {
+        var isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        var server = isLocal ? 'http://localhost:7000' : 'https://ui-theme.pydah.edu.in';
+        var s = document.createElement('script');
+        s.src = server + '/themes/theme-loader.js';
+        s.setAttribute('data-theme-server', server);
+        s.setAttribute('data-poll-interval', isLocal ? '5' : '30');
+        document.head.appendChild(s);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

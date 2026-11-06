@@ -166,7 +166,7 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
 
       {/* Main Sidebar Container */}
       <aside className={`
-        sidebar-modern fixed left-0 top-0 h-full bg-black border-r border-slate-600 flex flex-col z-50 shadow-2xl transition-all duration-300
+        sidebar-modern fixed left-0 top-0 h-full bg-sidebar text-sidebar-text border-r border-border flex flex-col z-50 shadow-2xl transition-all duration-300
         ${isMobileProp
           ? `w-60 ${!sidebarOpen ? '-translate-x-full' : 'translate-x-0'}`
           : `${!sidebarOpen ? 'w-20' : 'w-60'}`
@@ -174,13 +174,13 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
       `}>
 
         {/* Header Section */}
-        <div className="p-4 border-b border-slate-600 bg-gradient-to-r from-slate-800 to-slate-700">
+        <div className="p-4 border-b border-white/10 bg-black/15">
           <div className="flex items-center justify-between">
             {sidebarOpen && (
               <div className="flex items-center gap-3">
                 <div className="flex flex-col leading-tight">
-                  <span className="text-lg font-bold text-white">Pydah Group</span>
-                  <span className="text-sm text-slate-300 font-medium">Stationery Management</span>
+                  <span className="text-lg font-bold text-sidebar-text">Campo</span>
+                  <span className="text-sm text-sidebar-muted font-medium">Stationery Management</span>
                 </div>
               </div>
             )}
@@ -188,7 +188,7 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
             {/* Toggle Button */}
             {isMobileProp ? (
               <button
-                className="w-8 h-8 rounded-lg bg-slate-600 border border-slate-500 flex items-center justify-center cursor-pointer text-white transition-all duration-200 hover:bg-slate-500 hover:scale-105 shadow-sm"
+                className="w-8 h-8 rounded-lg bg-white/15 border border-white/20 flex items-center justify-center cursor-pointer text-sidebar-text transition-all duration-200 hover:bg-white/25 hover:scale-105 shadow-sm"
                 onClick={handleToggleSidebar}
                 title="Close menu"
               >
@@ -196,7 +196,7 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
               </button>
             ) : (
               <button
-                className="w-7 h-7 bg-blue-500 text-white border border-blue-400 flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-blue-600 hover:scale-105 shadow-sm rounded"
+                className="w-7 h-7 bg-primary text-white border border-primary-hover flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-primary-hover hover:scale-105 shadow-sm rounded"
                 onClick={handleToggleSidebar}
                 title={!sidebarOpen ? 'Expand sidebar' : 'Collapse sidebar'}
               >
@@ -231,8 +231,8 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
                         className={`
                           flex-1 flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-xl transition-all duration-200 relative group
                           ${isParentActive
-                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-                            : 'text-slate-300 hover:bg-slate-600 hover:text-white hover:translate-x-1'
+                            ? 'bg-primary text-white shadow-lg'
+                            : 'text-sidebar-muted hover:bg-white/10 hover:text-sidebar-text hover:translate-x-1'
                           }
                           ${!sidebarOpen ? 'justify-center px-2' : ''}
                         `}
@@ -257,14 +257,14 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
                           </span>
                         )}
                         {isParentActive && sidebarOpen && (
-                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-400 rounded-r-full"></div>
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white/70 rounded-r-full"></div>
                         )}
                       </NavLink>
                     </div>
 
                     {/* Submenu Dropdown under Academic Stock */}
                     {sidebarOpen && stockDropdownOpen && stockSubItems.length > 0 && (
-                      <ul className="mt-1.5 ml-4 pl-3 border-l-2 border-slate-700 space-y-1 py-1">
+                      <ul className="mt-1.5 ml-4 pl-3 border-l-2 border-white/20 space-y-1 py-1">
                         {stockSubItems.map((subItem) => {
                           const isSubActive = isParentActive && currentTab === subItem.tabId;
                           const SubIcon = subItem.icon;
@@ -279,12 +279,12 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
                                 className={`
                                   flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-all duration-150
                                   ${isSubActive
-                                    ? 'bg-blue-600 text-white shadow-sm font-semibold'
-                                    : 'text-slate-300 hover:bg-slate-700/80 hover:text-white'
+                                    ? 'bg-primary text-white shadow-sm font-semibold'
+                                    : 'text-sidebar-muted hover:bg-white/10 hover:text-sidebar-text'
                                   }
                                 `}
                               >
-                                <SubIcon size={14} className={`flex-shrink-0 ${isSubActive ? 'text-white' : 'text-slate-400'}`} />
+                                <SubIcon size={14} className={`flex-shrink-0 ${isSubActive ? 'text-white' : 'text-sidebar-muted'}`} />
                                 <span className="truncate">{subItem.label}</span>
                               </NavLink>
                             </li>
@@ -304,8 +304,8 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
                     className={`
                       flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-xl transition-all duration-200 relative group
                       ${isActive
-                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg'
-                        : 'text-slate-300 hover:bg-slate-600 hover:text-white hover:translate-x-1'
+                        ? 'bg-primary text-white shadow-lg'
+                        : 'text-sidebar-muted hover:bg-white/10 hover:text-sidebar-text hover:translate-x-1'
                       }
                       ${!sidebarOpen ? 'justify-center px-2' : ''}
                     `}
@@ -314,7 +314,7 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
                     <IconComponent size={20} className="flex-shrink-0" />
                     {sidebarOpen && <span className="truncate">{item.label}</span>}
                     {isActive && sidebarOpen && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-blue-400 rounded-r-full"></div>
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white/70 rounded-r-full"></div>
                     )}
                   </NavLink>
                 </li>
@@ -324,28 +324,28 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
         </div>
 
         {/* Footer Section - User Info & Logout */}
-        <div className={`border-t border-slate-600 bg-slate-750 ${sidebarOpen ? 'p-4' : 'p-2'}`}>
+        <div className={`border-t border-white/10 bg-black/10 ${sidebarOpen ? 'p-4' : 'p-2'}`}>
           {/* User Info */}
           {currentUser && (
-            <div className={`flex items-center bg-slate-700 border border-slate-600 rounded-xl text-slate-300 text-sm font-medium ${sidebarOpen ? 'gap-3 p-3' : 'justify-center p-2'
+            <div className={`flex items-center bg-white/10 border border-white/15 rounded-xl text-sidebar-text text-sm font-medium ${sidebarOpen ? 'gap-3 p-3' : 'justify-center p-2'
               }`}>
               {sidebarOpen && (
                 <>
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-400 to-blue-600 flex items-center justify-center text-white shadow-md">
+                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white shadow-md">
                     <User size={20} />
                   </div>
                   <div className="flex items-center justify-between gap-3 flex-1 min-w-0">
                     <div className="flex flex-col leading-tight flex-1 min-w-0">
-                      <span className="font-semibold text-sm truncate" title={isSuperAdmin ? 'Administrator' : (employeeName || currentUser.employeeName || currentUser.employee_name || currentUser.name)}>
+                      <span className="font-semibold text-sm truncate text-sidebar-text" title={isSuperAdmin ? 'Administrator' : (employeeName || currentUser.employeeName || currentUser.employee_name || currentUser.name)}>
                         {isSuperAdmin ? 'Administrator' : (employeeName || currentUser.employeeName || currentUser.employee_name || currentUser.name)}
                       </span>
-                      <span className="text-xs text-slate-300 truncate">
+                      <span className="text-xs text-sidebar-muted truncate">
                         {isSuperAdmin ? 'Administrator' : 'Sub-Administrator'}
                       </span>
                     </div>
                     <button
                       onClick={onLogout}
-                      className="p-2 rounded-lg bg-slate-600 hover:bg-red-500 hover:border-red-400 hover:text-white hover:shadow-md transition-all duration-200"
+                      className="p-2 rounded-lg bg-white/15 hover:bg-danger hover:border-danger hover:text-white hover:shadow-md transition-all duration-200"
                       title="Logout"
                     >
                       <LogOut size={18} />
@@ -356,7 +356,7 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
               {!sidebarOpen && (
                 <button
                   onClick={onLogout}
-                  className="p-2 rounded-lg bg-slate-600 hover:bg-red-500 hover:border-red-400 hover:text-white hover:shadow-md transition-all duration-200 w-full flex items-center justify-center"
+                  className="p-2 rounded-lg bg-white/15 hover:bg-danger hover:border-danger hover:text-white hover:shadow-md transition-all duration-200 w-full flex items-center justify-center"
                   title="Logout"
                 >
                   <LogOut size={18} />
