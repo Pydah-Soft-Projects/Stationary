@@ -2286,6 +2286,8 @@ const Reports = ({ currentUser }) => {
         const isGeneral = reportFilters.stockType === 'distribute';
         // Fetch transactions based on report filters
         const queryParams = new URLSearchParams();
+        queryParams.append('all', 'true');
+        queryParams.append('limit', 'all');
         if (reportFilters.course && !isGeneral) queryParams.append('course', reportFilters.course);
         if (reportFilters.paymentMethod) queryParams.append('paymentMethod', reportFilters.paymentMethod);
         if (reportFilters.isPaid !== '') queryParams.append('isPaid', reportFilters.isPaid);
@@ -2294,14 +2296,15 @@ const Reports = ({ currentUser }) => {
 
         const selectedCollegeId = reportFilters.collegeId || selectedCollege;
         if (selectedCollegeId) {
-          queryParams.append(isGeneral ? 'collegeId' : 'collegeId', selectedCollegeId);
+          queryParams.append('collegeId', selectedCollegeId);
         }
 
         const endpoint = isGeneral ? '/api/general-distributions' : '/api/transactions';
         const response = await fetch(apiUrl(`${endpoint}?${queryParams.toString()}`));
         if (!response.ok) throw new Error(`Failed to fetch ${isGeneral ? 'distributions' : 'transactions'} for report`);
 
-        let reportTransactions = await response.json();
+        const rawData = await response.json();
+        let reportTransactions = Array.isArray(rawData) ? rawData : (rawData.transactions || []);
 
         if (isGeneral) {
           // Normalize distribution data to match transaction structure for the report template

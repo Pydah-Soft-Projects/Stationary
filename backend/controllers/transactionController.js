@@ -726,7 +726,7 @@ const getAllTransactions = asyncHandler(async (req, res) => {
   const isChunkedFormat = req.query.format === 'chunked' || req.query.chunked === 'true';
   const hasExplicitLimit = req.query.limit !== undefined && req.query.limit !== 'all';
   const hasExplicitSkip = req.query.skip !== undefined;
-  const fetchAll = (req.query.all === 'true' || req.query.limit === 'all') && !hasExplicitLimit && !hasExplicitSkip;
+  const fetchAll = req.query.all === 'true' || req.query.limit === 'all' || req.query.allTransactions === 'true';
 
   const skip = Math.max(0, parseInt(req.query.skip, 10) || 0);
   const batchLimit = Math.min(Math.max(1, parseInt(limit, 10) || 2000), 10000);
