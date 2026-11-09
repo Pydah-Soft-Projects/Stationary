@@ -1538,40 +1538,129 @@ const Reports = ({ currentUser }) => {
       if (dayWiseData.length > 0 && (reportFilters.startDate || reportFilters.endDate)) {
         pdf.setFontSize(9);
         pdf.setFont(undefined, 'bold');
+        pdf.setTextColor(44, 62, 80);
         pdf.text(isGeneral ? 'Day-wise Distribution' : 'Day-wise Breakdown', 14, yPos);
         yPos += 5;
 
-        pdf.setFont(undefined, 'normal');
-        pdf.setFontSize(7);
-        pdf.setFillColor(240, 240, 240);
-        pdf.rect(14, yPos - 3, 120, 4, 'F');
-        pdf.setFont(undefined, 'bold');
-        pdf.text('Date', 14, yPos);
-        pdf.text(isGeneral ? 'Dist' : 'Trx', 50, yPos);
-        if (!isGeneral) {
-          pdf.text('Total', 75, yPos, { align: 'right' });
-          pdf.text('Cash', 105, yPos, { align: 'right' });
-          pdf.text('Online', 135, yPos, { align: 'right' });
-        }
-        yPos += 4;
+        const tableX = 14;
+        const tableW = 120;
+        const headerH = 6;
+        const rowH = 5.2;
+
+        const dayWiseCols = isGeneral
+          ? [
+              { label: 'Date', x: 14, w: 80, align: 'left', textX: 16 },
+              { label: 'Dist', x: 94, w: 40, align: 'center', textX: 114 }
+            ]
+          : [
+              { label: 'Date', x: 14, w: 32, align: 'left', textX: 16 },
+              { label: 'Trx', x: 46, w: 16, align: 'center', textX: 54 },
+              { label: 'Total', x: 62, w: 24, align: 'right', textX: 84 },
+              { label: 'Cash', x: 86, w: 24, align: 'right', textX: 108 },
+              { label: 'Online', x: 110, w: 24, align: 'right', textX: 132 }
+            ];
+
+        const colDividers = isGeneral ? [94] : [46, 62, 86, 110];
+
+        const drawDayWiseHeader = (topY) => {
+          pdf.setFillColor(235, 238, 242);
+          pdf.setDrawColor(100, 110, 125);
+          pdf.setLineWidth(0.25);
+          pdf.rect(tableX, topY, tableW, headerH, 'FD');
+
+          colDividers.forEach((divX) => {
+            pdf.line(divX, topY, divX, topY + headerH);
+          });
+
+          pdf.setFont(undefined, 'bold');
+          pdf.setFontSize(7.5);
+          pdf.setTextColor(20, 30, 45);
+          const textY = topY + 4.1;
+          dayWiseCols.forEach((col) => {
+            pdf.text(col.label, col.textX, textY, { align: col.align });
+          });
+        };
+
+        drawDayWiseHeader(yPos);
+        yPos += headerH;
 
         pdf.setFont(undefined, 'normal');
-        dayWiseData.forEach((day) => {
-          if (yPos > 180) {
+        pdf.setFontSize(7);
+        pdf.setTextColor(30, 30, 30);
+
+        dayWiseData.forEach((day, index) => {
+          if (yPos + rowH > 185) {
             pdf.addPage();
             yPos = 14;
+            drawDayWiseHeader(yPos);
+            yPos += headerH;
+            pdf.setFont(undefined, 'normal');
+            pdf.setFontSize(7);
+            pdf.setTextColor(30, 30, 30);
           }
+
+          const rowTop = yPos;
+          const textY = rowTop + 3.6;
+
+          if (index % 2 === 1) {
+            pdf.setFillColor(248, 250, 252);
+            pdf.rect(tableX, rowTop, tableW, rowH, 'F');
+          }
+
+          pdf.setDrawColor(160, 170, 185);
+          pdf.setLineWidth(0.2);
+          pdf.rect(tableX, rowTop, tableW, rowH, 'D');
+
+          colDividers.forEach((divX) => {
+            pdf.line(divX, rowTop, divX, rowTop + rowH);
+          });
+
           const dateStr = day.dayName.substring(0, 15);
-          pdf.text(dateStr, 14, yPos);
-          pdf.text(`${day.transactions.length}`, 50, yPos);
+          pdf.text(dateStr, 16, textY);
+          pdf.text(`${day.transactions.length}`, isGeneral ? 114 : 54, textY, { align: 'center' });
           if (!isGeneral) {
-            pdf.text(formatCurrencyForPDF(day.totalAmount), 75, yPos, { align: 'right' });
-            pdf.text(formatCurrencyForPDF(day.cashAmount), 105, yPos, { align: 'right' });
-            pdf.text(formatCurrencyForPDF(day.onlineAmount), 135, yPos, { align: 'right' });
+            pdf.text(formatCurrencyForPDF(day.totalAmount), 84, textY, { align: 'right' });
+            pdf.text(formatCurrencyForPDF(day.cashAmount), 108, textY, { align: 'right' });
+            pdf.text(formatCurrencyForPDF(day.onlineAmount), 132, textY, { align: 'right' });
           }
-          yPos += 4;
+
+          yPos += rowH;
         });
-        yPos += 3;
+
+        // Summary Total Row
+        if (yPos + rowH > 185) {
+          pdf.addPage();
+          yPos = 14;
+          drawDayWiseHeader(yPos);
+          yPos += headerH;
+        }
+
+        const totalRowTop = yPos;
+        const totalTextY = totalRowTop + 3.6;
+        pdf.setFillColor(230, 235, 245);
+        pdf.setDrawColor(100, 110, 125);
+        pdf.setLineWidth(0.25);
+        pdf.rect(tableX, totalRowTop, tableW, rowH, 'FD');
+        colDividers.forEach((divX) => {
+          pdf.line(divX, totalRowTop, divX, totalRowTop + rowH);
+        });
+
+        pdf.setFont(undefined, 'bold');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(15, 23, 42);
+        pdf.text('Total', 16, totalTextY);
+        const totalTrxCount = dayWiseData.reduce((sum, d) => sum + d.transactions.length, 0);
+        pdf.text(`${totalTrxCount}`, isGeneral ? 114 : 54, totalTextY, { align: 'center' });
+        if (!isGeneral) {
+          const totalDaySum = dayWiseData.reduce((sum, d) => sum + (d.totalAmount || 0), 0);
+          const totalCashSum = dayWiseData.reduce((sum, d) => sum + (d.cashAmount || 0), 0);
+          const totalOnlineSum = dayWiseData.reduce((sum, d) => sum + (d.onlineAmount || 0), 0);
+          pdf.text(formatCurrencyForPDF(totalDaySum), 84, totalTextY, { align: 'right' });
+          pdf.text(formatCurrencyForPDF(totalCashSum), 108, totalTextY, { align: 'right' });
+          pdf.text(formatCurrencyForPDF(totalOnlineSum), 132, totalTextY, { align: 'right' });
+        }
+
+        yPos += rowH + 5;
       }
 
       // Add Day-End Sales Summary in statistics if enabled
@@ -1616,86 +1705,106 @@ const Reports = ({ currentUser }) => {
 
     // Transactions Table Header
     if (!reportFilters.onlyStatistics && filteredTransactions.length > 0) {
+      if (yPos > 175) {
+        pdf.addPage();
+        yPos = 14;
+      }
       pdf.setFontSize(11);
       pdf.setFont(undefined, 'bold');
-      pdf.setFillColor(240, 240, 240);
+      pdf.setTextColor(44, 62, 80);
+      pdf.setFillColor(240, 242, 245);
       pdf.rect(14, yPos - 4, 120, 6, 'F');
       pdf.text(isGeneral ? 'Distribution Details' : 'Transaction Details', 14, yPos);
       yPos += 6;
 
-      // Table Headers
-      pdf.setFontSize(7);
-      pdf.setFont(undefined, 'bold');
-      pdf.setFillColor(230, 230, 230);
-      pdf.rect(14, yPos - 3, 120, 5, 'F');
-      const colPositions = {
-        date: 16,
-        student: 44,
-        course: isGeneral ? 94 : 76,
-        payment: 102,
-        amount: 128,
+      const trxTableX = 14;
+      const trxTableW = 120;
+      const trxHeaderH = 5.5;
+      const trxRowH = 5.0;
+
+      const trxCols = isGeneral
+        ? [
+            { label: 'Date', x: 14, w: 26, align: 'left', textX: 16 },
+            { label: 'Recipient', x: 40, w: 46, align: 'left', textX: 42 },
+            { label: 'Department', x: 86, w: 48, align: 'left', textX: 88 }
+          ]
+        : [
+            { label: 'Date', x: 14, w: 20, align: 'left', textX: 16 },
+            { label: 'Student', x: 34, w: 36, align: 'left', textX: 36 },
+            { label: 'Course', x: 70, w: 22, align: 'left', textX: 72 },
+            { label: 'Payment', x: 92, w: 20, align: 'left', textX: 94 },
+            { label: 'Amount', x: 112, w: 22, align: 'right', textX: 132 }
+          ];
+
+      const trxDividers = isGeneral ? [40, 86] : [34, 70, 92, 112];
+
+      const drawTrxHeader = (topY) => {
+        pdf.setFillColor(235, 238, 242);
+        pdf.setDrawColor(100, 110, 125);
+        pdf.setLineWidth(0.25);
+        pdf.rect(trxTableX, topY, trxTableW, trxHeaderH, 'FD');
+
+        trxDividers.forEach((divX) => {
+          pdf.line(divX, topY, divX, topY + trxHeaderH);
+        });
+
+        pdf.setFont(undefined, 'bold');
+        pdf.setFontSize(7.5);
+        pdf.setTextColor(20, 30, 45);
+        const textY = topY + 3.8;
+        trxCols.forEach((col) => {
+          pdf.text(col.label, col.textX, textY, { align: col.align });
+        });
       };
 
-      pdf.text('Date', colPositions.date, yPos);
-      pdf.text(isGeneral ? 'Recipient' : 'Student', colPositions.student, yPos);
-      pdf.text(isGeneral ? 'Department' : 'Course', colPositions.course, yPos);
-      if (!isGeneral) {
-        pdf.text('Payment', colPositions.payment, yPos);
-        pdf.text('Amount', colPositions.amount, yPos, { align: 'right' });
-      }
-      yPos += 5;
+      drawTrxHeader(yPos);
+      yPos += trxHeaderH;
 
       pdf.setFont(undefined, 'normal');
       pdf.setFontSize(7);
+      pdf.setTextColor(30, 30, 30);
 
       filteredTransactions.forEach((transaction, index) => {
-        // Check if we need a new page
-        if (yPos > 180) {
+        if (yPos + trxRowH > 185) {
           pdf.addPage();
           yPos = 14;
-          // Redraw table headers on new page
-          pdf.setFont(undefined, 'bold');
-          pdf.setFontSize(8);
-          pdf.setFillColor(230, 230, 230);
-          pdf.rect(14, yPos - 3, 120, 5, 'F');
-          pdf.text('Date', colPositions.date, yPos);
-          pdf.text(isGeneral ? 'Recipient' : 'Student', colPositions.student, yPos);
-          pdf.text(isGeneral ? 'Department' : 'Course', colPositions.course, yPos);
-          if (!isGeneral) {
-            pdf.text('Payment', colPositions.payment, yPos);
-            pdf.text('Amount', colPositions.amount, yPos, { align: 'right' });
-          }
-          yPos += 5;
+          drawTrxHeader(yPos);
+          yPos += trxHeaderH;
           pdf.setFont(undefined, 'normal');
+          pdf.setFontSize(7);
+          pdf.setTextColor(30, 30, 30);
         }
 
+        const rowTop = yPos;
+        const textY = rowTop + 3.5;
+
+        if (index % 2 === 1) {
+          pdf.setFillColor(248, 250, 252);
+          pdf.rect(trxTableX, rowTop, trxTableW, trxRowH, 'F');
+        }
+
+        pdf.setDrawColor(160, 170, 185);
+        pdf.setLineWidth(0.2);
+        pdf.rect(trxTableX, rowTop, trxTableW, trxRowH, 'D');
+
+        trxDividers.forEach((divX) => {
+          pdf.line(divX, rowTop, divX, rowTop + trxRowH);
+        });
+
         const date = new Date(transaction.transactionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        const studentName = (transaction.student?.name || transaction.employee?.name || 'N/A').substring(0, isGeneral ? 25 : 16);
-        const course = (transaction.student?.course || transaction.employee?.department || 'N/A').toUpperCase().substring(0, isGeneral ? 15 : 8);
+        const studentName = (transaction.student?.name || transaction.employee?.name || 'N/A').substring(0, isGeneral ? 25 : 18);
+        const course = (transaction.student?.course || transaction.employee?.department || 'N/A').toUpperCase().substring(0, isGeneral ? 15 : 10);
         const amount = formatCurrencyForPDF(transaction.totalAmount);
         const payment = transaction.paymentMethod ? transaction.paymentMethod.toUpperCase() : 'N/A';
 
-        // Alternate row background
-        if (index % 2 === 0) {
-          pdf.setFillColor(250, 250, 250);
-          pdf.rect(14, yPos - 3, 120, 5, 'F');
-        }
-
-        pdf.text(date, colPositions.date, yPos);
-        pdf.text(studentName, colPositions.student, yPos);
-        pdf.text(course, colPositions.course, yPos);
+        pdf.text(date, 16, textY);
+        pdf.text(studentName, isGeneral ? 42 : 36, textY);
+        pdf.text(course, isGeneral ? 88 : 72, textY);
         if (!isGeneral) {
-          pdf.text(payment, colPositions.payment, yPos);
-          pdf.text(amount, colPositions.amount, yPos, { align: 'right' });
+          pdf.text(payment, 94, textY);
+          pdf.text(amount, 132, textY, { align: 'right' });
         }
-        yPos += 5;
-
-        // Draw separator line
-        if (index < filteredTransactions.length - 1) {
-          pdf.setDrawColor(220, 220, 220);
-          pdf.line(14, yPos, 134, yPos);
-          yPos += 2;
-        }
+        yPos += trxRowH;
       });
 
       yPos += 5;
