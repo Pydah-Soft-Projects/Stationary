@@ -626,13 +626,13 @@ function App() {
               currentUser={currentUser}
             />
             <main className={`
-            flex-1 min-h-screen bg-gray-50 flex justify-center items-start transition-all duration-300
+            flex-1 min-h-screen bg-background text-text-main flex justify-center items-start transition-all duration-300
             ${isMobile ? 'ml-0' : (sidebarOpen ? 'ml-52' : 'ml-20')}
             ${isMobile ? 'pt-20 px-4' : 'px-8'}
           `}>
               {isMobile && (
                 <button
-                  className="fixed top-4 left-4 z-50 w-12 h-12 rounded-xl bg-primary-500 border-none text-white flex items-center justify-center cursor-pointer shadow-strong transition-all duration-200 hover:bg-primary-600 hover:scale-105"
+                  className="fixed top-4 left-4 z-50 w-12 h-12 rounded-xl bg-primary border-none text-white flex items-center justify-center cursor-pointer shadow-strong transition-all duration-200 hover:bg-primary-hover hover:scale-105"
                   onClick={() => setSidebarOpen(!sidebarOpen)}
                 >
                   <Menu size={24} />

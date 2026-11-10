@@ -261,7 +261,7 @@ const Settings = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6">
+      <div className="min-h-screen bg-background text-text-main p-6">
         <div className="flex flex-col items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
           <p className="text-gray-600">Loading settings...</p>
@@ -271,7 +271,7 @@ const Settings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-background text-text-main p-6">
       <div className="max-w-5xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">

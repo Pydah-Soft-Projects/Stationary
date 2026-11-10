@@ -4,7 +4,7 @@ import { Shield, LogIn, User, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import { apiUrl } from '../utils/api';
 
 const defaultBranding = {
-  header: 'Pydah Stationary Portal',
+  header: 'Campo Stationary Portal',
   subheader: 'Efficiently managing academic supplies, inventory, and student allocations in one unified platform.',
 };
 
@@ -180,7 +180,7 @@ const Login = ({ onLogin, onSSOLogin }) => {
           </div>
           <h3 className="text-xl font-bold tracking-tight mb-2 text-white">Authenticating Session...</h3>
           <p className="text-sm text-slate-300 mb-6">
-            Connecting through Pydah Central SSO Gateway to verify your credentials.
+            Connecting through Campo Central SSO Gateway to verify your credentials.
           </p>
           <div className="flex items-center gap-3 text-xs text-blue-300 font-medium bg-blue-950/60 px-4 py-2 rounded-full border border-blue-500/30 mb-5">
             <div className="w-4 h-4 border-2 border-blue-400/30 border-t-blue-400 rounded-full animate-spin" />

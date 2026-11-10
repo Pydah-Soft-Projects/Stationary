@@ -1365,7 +1365,7 @@ const SubAdminManagement = ({ currentUser }) => {
 
   return (
     <>
-      <div className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-background text-text-main py-8 px-4 sm:px-6 lg:px-8">
         <div className="w-full">
           {/* Main Top Header */}
           <div className="flex justify-between items-center mb-6">

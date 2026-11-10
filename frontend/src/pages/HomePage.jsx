@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Shield, ArrowRight } from 'lucide-react';
 import { apiUrl } from '../utils/api';
 
-const fallbackHeader = 'Pydah Stationary Portal';
+const fallbackHeader = 'Campo Stationary Portal';
 const fallbackSubheader = 'Efficiently managing academic supplies, inventory, and student allocations in one unified platform.';
 
 const HomePage = () => {
@@ -62,7 +62,7 @@ const HomePage = () => {
       {/* Content */}
       <div className="relative z-20 text-center px-4  max-w-5xl">
         <h1 className="inline-block text-4xl md:text-6xl font-bold text-white mb-8 px-10 py-4 bg-white/10 backdrop-blur-md border border-white/20 rounded-full tracking-tight shadow-2xl shadow-black/20">
-          PYDAH STATIONARY PORTAL
+          CAMPO STATIONARY PORTAL
         </h1>
         
         <p className="text-xl md:text-2xl text-blue-100 mb-12 font-medium max-w-3xl mx-auto leading-relaxed">
@@ -83,7 +83,7 @@ const HomePage = () => {
       {/* Footer Branding */}
       <div className="absolute bottom-8 left-0 right-0 z-20 text-center">
         <p className="text-white/60 text-sm font-medium tracking-widest uppercase">
-          Powered by PYDAHSOFT
+          Powered by CAMPO
         </p>
       </div>
     </div>
@@ -91,4 +91,3 @@ const HomePage = () => {
 };
 
 export default HomePage;
- HomePage;

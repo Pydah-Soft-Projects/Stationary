@@ -2,17 +2,132 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
+:root {
+  /* Centralized Theme Runtime Fallback Tokens */
+  --primary: #47745B;
+  --primary-hover: #365B46;
+  --primary-light: #EAF3ED;
+  --primary-rgb: 71, 116, 91;
+
+  --secondary: #78977A;
+  --secondary-rgb: 120, 151, 122;
+
+  --accent: #C58B4E;
+  --accent-rgb: 197, 139, 78;
+
+  --primary-50: #F3F6F5;
+  --primary-100: #E7EFEA;
+  --primary-200: #CCE0D5;
+  --primary-300: #A6C9B6;
+  --primary-400: #81B197;
+  --primary-500: #48755C;
+  --primary-600: #518569;
+  --primary-700: #3E6550;
+  --primary-800: #2B4637;
+  --primary-900: #1C2C23;
+
+  --secondary-50: #F3F6F3;
+  --secondary-100: #E7EFE7;
+  --secondary-200: #CCE0CD;
+  --secondary-300: #AEC1B0;
+  --secondary-400: #8CA68E;
+  --secondary-500: #759577;
+  --secondary-600: #5D795F;
+  --secondary-700: #475C48;
+  --secondary-800: #313F32;
+  --secondary-900: #1F2820;
+
+  --background: #F6F9F6;
+  --background-rgb: 246, 249, 246;
+  --surface: #FFFFFF;
+  --surface-rgb: 255, 255, 255;
+
+  --sidebar: #263D32;
+  --sidebar-text: #F5FAF6;
+  --sidebar-muted: #AFC5B5;
+
+  --navbar: #FFFFFF;
+  --navbar-border: #DFE9E1;
+
+  --text-primary: #202D25;
+  --text-secondary: #526257;
+  --text-muted: #819087;
+
+  --border: #DFE9E1;
+  --border-strong: #C7D7CA;
+
+  --success: #34805C;
+  --warning: #B77A25;
+  --danger: #B74747;
+  --info: #397A9C;
+}
+
 @theme {
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-200: #bfdbfe;
-  --color-primary-300: #93c5fd;
-  --color-primary-400: #60a5fa;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
-  --color-primary-700: #1d4ed8;
-  --color-primary-800: #1e40af;
-  --color-primary-900: #1e3a8a;
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-light: var(--primary-light);
+  --color-primary-rgb: var(--primary-rgb);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-rgb: var(--secondary-rgb);
+  --color-accent: var(--accent);
+  --color-accent-rgb: var(--accent-rgb);
+
+  --color-primary-50: var(--primary-50);
+  --color-primary-100: var(--primary-100);
+  --color-primary-200: var(--primary-200);
+  --color-primary-300: var(--primary-300);
+  --color-primary-400: var(--primary-400);
+  --color-primary-500: var(--primary-500);
+  --color-primary-600: var(--primary-600);
+  --color-primary-700: var(--primary-700);
+  --color-primary-800: var(--primary-800);
+  --color-primary-900: var(--primary-900);
+
+  --color-secondary-50: var(--secondary-50);
+  --color-secondary-100: var(--secondary-100);
+  --color-secondary-200: var(--secondary-200);
+  --color-secondary-300: var(--secondary-300);
+  --color-secondary-400: var(--secondary-400);
+  --color-secondary-500: var(--secondary-500);
+  --color-secondary-600: var(--secondary-600);
+  --color-secondary-700: var(--secondary-700);
+  --color-secondary-800: var(--secondary-800);
+  --color-secondary-900: var(--secondary-900);
+
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-text: var(--sidebar-text);
+  --color-sidebar-muted: var(--sidebar-muted);
+
+  --color-navbar: var(--navbar);
+  --color-navbar-border: var(--navbar-border);
+
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-text-main: var(--text-primary);
+  --color-text-sub: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  /* Map default Tailwind blue utilities to dynamic Brand Primary theme tokens */
+  --color-blue-50: var(--primary-light);
+  --color-blue-100: var(--primary-100);
+  --color-blue-200: var(--primary-200);
+  --color-blue-300: var(--primary-300);
+  --color-blue-400: var(--primary-400);
+  --color-blue-500: var(--primary);
+  --color-blue-600: var(--primary);
+  --color-blue-700: var(--primary-hover);
+  --color-blue-800: var(--primary-hover);
+  --color-blue-900: var(--primary-hover);
   
   --color-gray-50: #f8fafc;
   --color-gray-100: #f1f5f9;
@@ -71,7 +186,9 @@
   }
   
   body {
-    @apply font-sans text-gray-800 bg-gray-50 antialiased;
+    background-color: var(--background);
+    color: var(--text-primary);
+    @apply font-sans antialiased;
   }
   
   /* Global button cursor pointer */

@@ -35,26 +35,26 @@ const ContextSelector = ({ viewContext, setViewContext, colleges }) => {
       <button
         type="button"
         onClick={() => setIsOpen(prev => !prev)}
-        className="flex items-center gap-2 bg-white hover:bg-gray-50/80 px-3.5 py-2 rounded-xl border border-gray-200 shadow-sm transition-all text-left outline-none cursor-pointer group"
+        className="flex items-center gap-2 bg-surface hover:bg-background/80 px-3.5 py-2 rounded-xl border border-border shadow-sm transition-all text-left outline-none cursor-pointer group"
       >
-        <Filter size={14} className="text-blue-500 flex-shrink-0" />
-        <span className="text-xs text-gray-500 font-medium whitespace-nowrap">View Stock For:</span>
-        <span className="text-xs font-bold text-gray-800 whitespace-nowrap max-w-[150px] sm:max-w-[200px] md:max-w-[260px] truncate">
+        <Filter size={14} className="text-primary flex-shrink-0" />
+        <span className="text-xs text-text-muted font-medium whitespace-nowrap">View Stock For:</span>
+        <span className="text-xs font-bold text-text-main whitespace-nowrap max-w-[150px] sm:max-w-[200px] md:max-w-[260px] truncate">
           {selectedLabel}
         </span>
         <ChevronDown
           size={14}
-          className={`text-gray-400 transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180 text-blue-500' : 'group-hover:text-gray-600'}`}
+          className={`text-text-muted transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180 text-primary' : 'group-hover:text-text-main'}`}
         />
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-1.5 w-72 bg-white rounded-xl shadow-2xl border border-gray-200 z-50 overflow-hidden py-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
-          <div className="px-3.5 py-1.5 border-b border-gray-100 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+        <div className="absolute right-0 top-full mt-1.5 w-72 bg-surface rounded-xl shadow-2xl border border-border z-50 overflow-hidden py-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+          <div className="px-3.5 py-1.5 border-b border-border text-[11px] font-semibold text-text-muted uppercase tracking-wider">
             Select Location
           </div>
 
-          <div className="max-h-64 overflow-y-auto divide-y divide-gray-50">
+          <div className="max-h-64 overflow-y-auto divide-y divide-border/40">
             {/* Central Warehouse option */}
             <button
               type="button"
@@ -64,16 +64,16 @@ const ContextSelector = ({ viewContext, setViewContext, colleges }) => {
               }}
               className={`w-full px-3.5 py-2.5 text-left flex items-center justify-between text-xs transition-colors ${
                 viewContext === 'central'
-                  ? 'bg-blue-50 text-blue-700 font-bold'
-                  : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900 font-medium'
+                  ? 'bg-primary-light text-primary font-bold'
+                  : 'text-text-main hover:bg-background font-medium'
               }`}
             >
               <div className="flex items-center gap-2 truncate pr-2">
-                <Building2 size={14} className={viewContext === 'central' ? 'text-blue-600' : 'text-gray-400'} />
+                <Building2 size={14} className={viewContext === 'central' ? 'text-primary' : 'text-text-muted'} />
                 <span className="truncate">Central Warehouse (Global)</span>
               </div>
               {viewContext === 'central' && (
-                <Check size={14} className="text-blue-600 flex-shrink-0" />
+                <Check size={14} className="text-primary flex-shrink-0" />
               )}
             </button>
 
@@ -90,12 +90,12 @@ const ContextSelector = ({ viewContext, setViewContext, colleges }) => {
                   }}
                   className={`w-full px-3.5 py-2.5 text-left flex items-center justify-between text-xs transition-colors ${
                     isSelected
-                      ? 'bg-blue-50 text-blue-700 font-bold'
-                      : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900 font-medium'
+                      ? 'bg-primary-light text-primary font-bold'
+                      : 'text-text-main hover:bg-background font-medium'
                   }`}
                 >
                   <div className="flex items-center gap-2 truncate pr-2">
-                    <Building2 size={14} className={isSelected ? 'text-blue-600' : 'text-gray-400'} />
+                    <Building2 size={14} className={isSelected ? 'text-primary' : 'text-text-muted'} />
                     <span className="truncate" title={college.name}>{college.name}</span>
                   </div>
                   {isSelected && (
@@ -209,7 +209,7 @@ const ManageStock = ({ itemCategories, addItemCategory, setItemCategories, curre
   }, [activeTab, allTabs, tabs]);
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-background text-text-main p-6">
       <div className="mx-auto">
         {/* Header Section for Academic Stock (Products) */}
         {activeTab === 'products' ? (
@@ -217,12 +217,12 @@ const ManageStock = ({ itemCategories, addItemCategory, setItemCategories, curre
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               {/* Title & Icon */}
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+                <div className="w-14 h-14 bg-primary text-white rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
                   <Archive className="w-7 h-7 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-semibold text-gray-900">Academic Stock</h1>
-                  <p className="text-gray-600 mt-1 text-sm">Manage products, stock entries, and vendors</p>
+                  <h1 className="text-2xl font-semibold text-text-main">Academic Stock</h1>
+                  <p className="text-text-sub mt-1 text-sm">Manage products, stock entries, and vendors</p>
                 </div>
               </div>
 
@@ -241,7 +241,7 @@ const ManageStock = ({ itemCategories, addItemCategory, setItemCategories, curre
                 {canAccessProducts && (
                   <button
                     onClick={handleAddProductClick}
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-md hover:shadow-lg text-sm font-semibold cursor-pointer whitespace-nowrap"
+                    className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary-hover transition-all shadow-md hover:shadow-lg text-sm font-semibold cursor-pointer whitespace-nowrap"
                   >
                     <Plus size={18} />
                     <span>Add Product</span>
@@ -261,14 +261,14 @@ const ManageStock = ({ itemCategories, addItemCategory, setItemCategories, curre
         ) : null}
 
         {tabs.length === 0 && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+          <div className="bg-surface rounded-xl shadow-sm border border-border p-8 text-center">
             <div className="flex flex-col items-center gap-4">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
-                <Lock className="text-gray-400" size={32} />
+              <div className="w-16 h-16 bg-background rounded-full flex items-center justify-center">
+                <Lock className="text-text-muted" size={32} />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Access</h3>
-                <p className="text-sm text-gray-600">You do not have permission to access any stock management features.</p>
+                <h3 className="text-lg font-semibold text-text-main mb-2">No Access</h3>
+                <p className="text-sm text-text-sub">You do not have permission to access any stock management features.</p>
               </div>
             </div>
           </div>

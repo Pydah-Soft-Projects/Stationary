@@ -198,22 +198,22 @@ const Dashboard = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-5">
+    <div className="min-h-screen bg-background text-text-main p-4 sm:p-5">
       <div className="mx-auto">
         {/* Header */}
         <div className="mb-5 flex flex-col md:flex-row md:items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">Dashboard</h1>
-            <p className="text-sm text-gray-600">Welcome to Stationery Management System</p>
+            <h1 className="text-2xl font-bold text-text-main mb-1">Dashboard</h1>
+            <p className="text-sm text-text-sub">Welcome to Stationery Management System</p>
           </div>
 
           {isSuperAdmin && (
             <div className="relative min-w-[250px]">
-              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" size={18} />
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" size={18} />
               <select
                 value={selectedCollege}
                 onChange={(e) => setSelectedCollege(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none appearance-none cursor-pointer"
+                className="w-full pl-10 pr-4 py-2 bg-surface text-text-main border border-border rounded-lg shadow-sm focus:ring-2 focus:ring-primary focus:border-transparent outline-none appearance-none cursor-pointer"
               >
                 <option value="">Central Warehouse (Global)</option>
                 {safeColleges.map(college => (
@@ -223,15 +223,15 @@ const Dashboard = () => {
                 ))}
               </select>
               <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                <svg className="w-4 h-4 text-text-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
               </div>
             </div>
           )}
           {!isSuperAdmin && currentUser?.assignedCollege && (
-            <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 shadow-sm">
-              <Building2 className="text-blue-600" size={18} />
-              <span className="text-xs font-semibold text-blue-600 uppercase tracking-wider">Campus:</span>
-              <span className="text-sm font-bold text-blue-900">
+            <div className="flex items-center gap-2 bg-primary-light border border-primary/20 rounded-lg px-4 py-2 shadow-sm">
+              <Building2 className="text-primary" size={18} />
+              <span className="text-xs font-semibold text-primary uppercase tracking-wider">Campus:</span>
+              <span className="text-sm font-bold text-text-main">
                 {safeColleges.find(c => String(c._id) === String(typeof currentUser.assignedCollege === 'object' ? currentUser.assignedCollege?._id : currentUser.assignedCollege))?.name || 'Assigned Campus'}
               </span>
             </div>
@@ -282,76 +282,76 @@ const Dashboard = () => {
           {/* Total Products */}
           <div
             onClick={() => setActiveModal('products')}
-            className="bg-white rounded-xl p-3.5 sm:p-4 shadow-sm border border-gray-200 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
+            className="bg-surface rounded-xl p-3.5 sm:p-4 shadow-sm border border-border hover:shadow-md hover:border-primary/50 transition-all cursor-pointer"
           >
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <Package size={18} className="text-blue-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-lg font-bold text-gray-900 truncate">
+                <div className="text-lg font-bold text-text-main truncate">
                   {loading ? '...' : stats.totalProducts}
                 </div>
-                <div className="text-xs text-gray-500">Total Products</div>
+                <div className="text-xs text-text-muted">Total Products</div>
               </div>
-              <ArrowRight size={16} className="text-gray-400 flex-shrink-0" />
+              <ArrowRight size={16} className="text-text-muted flex-shrink-0" />
             </div>
           </div>
 
           {/* Stock Value */}
           <div
             onClick={() => setActiveModal('stockValue')}
-            className="bg-white rounded-xl p-3.5 sm:p-4 shadow-sm border border-gray-200 hover:shadow-md hover:border-green-300 transition-all cursor-pointer"
+            className="bg-surface rounded-xl p-3.5 sm:p-4 shadow-sm border border-border hover:shadow-md hover:border-green-300 transition-all cursor-pointer"
           >
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <BarChart3 size={18} className="text-green-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-lg font-bold text-gray-900 truncate">
+                <div className="text-lg font-bold text-text-main truncate">
                   {loading ? '...' : formatCurrency(displayStockValue)}
                 </div>
-                <div className="text-xs text-gray-500">Stock Value</div>
+                <div className="text-xs text-text-muted">Stock Value</div>
               </div>
-              <ArrowRight size={16} className="text-gray-400 flex-shrink-0" />
+              <ArrowRight size={16} className="text-text-muted flex-shrink-0" />
             </div>
           </div>
 
           {/* Low Stock Alert */}
           <div
             onClick={() => setActiveModal('lowStock')}
-            className="bg-white rounded-xl p-3.5 sm:p-4 shadow-sm border border-gray-200 hover:shadow-md hover:border-red-300 transition-all cursor-pointer"
+            className="bg-surface rounded-xl p-3.5 sm:p-4 shadow-sm border border-border hover:shadow-md hover:border-red-300 transition-all cursor-pointer"
           >
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-red-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <AlertCircle size={18} className="text-red-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-lg font-bold text-gray-900 truncate">
+                <div className="text-lg font-bold text-text-main truncate">
                   {loading ? '...' : stats.lowStockItems}
                 </div>
-                <div className="text-xs text-gray-500">Low Stock Items</div>
+                <div className="text-xs text-text-muted">Low Stock Items</div>
               </div>
-              <ArrowRight size={16} className="text-gray-400 flex-shrink-0" />
+              <ArrowRight size={16} className="text-text-muted flex-shrink-0" />
             </div>
           </div>
 
           {/* Zero-Stock Dues Card */}
           <div
             onClick={() => setActiveModal('zeroStock')}
-            className="bg-white rounded-xl p-3.5 sm:p-4 shadow-sm border border-gray-200 hover:shadow-md hover:border-orange-300 transition-all cursor-pointer"
+            className="bg-surface rounded-xl p-3.5 sm:p-4 shadow-sm border border-border hover:shadow-md hover:border-orange-300 transition-all cursor-pointer"
           >
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-orange-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <PackageSearch size={18} className="text-orange-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-lg font-bold text-gray-900 truncate">
+                <div className="text-lg font-bold text-text-main truncate">
                   {loading ? '...' : stats.zeroStockDuesStudents}
                 </div>
-                <div className="text-xs text-gray-500">Zero-Stock Dues</div>
+                <div className="text-xs text-text-muted">Zero-Stock Dues</div>
               </div>
-              <ArrowRight size={16} className="text-gray-400 flex-shrink-0" />
+              <ArrowRight size={16} className="text-text-muted flex-shrink-0" />
             </div>
           </div>
         </div>

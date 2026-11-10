@@ -18,9 +18,9 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         includeAssets: ['Pydah_LOGO.png', 'vite.svg', 'offline.html'],
         manifest: {
-          name: 'Pydah Stationery Management',
-          short_name: 'Pydah Stationery',
-          description: 'Offline-capable stationery management for the Pydah Group.',
+          name: 'Campo Stationery Management',
+          short_name: 'Campo Stationery',
+          description: 'Offline-capable stationery management for Campo.',
           theme_color: '#0f172a',
           background_color: '#0f172a',
           display: 'standalone',
