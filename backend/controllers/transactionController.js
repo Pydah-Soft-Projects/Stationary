@@ -828,7 +828,7 @@ const updateTransaction = asyncHandler(async (req, res) => {
     throw new Error('Transaction not found');
   }
 
-  const { items, paymentMethod, isPaid, remarks, cashAmount, onlineAmount } = req.body;
+  const { items, paymentMethod, isPaid, remarks, cashAmount, onlineAmount, transactionDate, updatedBy } = req.body;
 
   // If items are being updated, recalculate total and handle stock
   if (items && Array.isArray(items) && items.length > 0) {
@@ -1131,6 +1131,24 @@ const updateTransaction = asyncHandler(async (req, res) => {
     transaction.remarks = remarks;
   }
 
+  let parsedTransactionDate = null;
+  if (transactionDate !== undefined) {
+    const parsedDate = new Date(transactionDate);
+    if (isNaN(parsedDate.getTime())) {
+      res.status(400);
+      throw new Error('Invalid transaction date format');
+    }
+    // Strictly prevent future dates: only present (same day) and past dates are allowed
+    const currentTxTime = new Date(transaction.transactionDate || transaction.createdAt || Date.now()).getTime();
+    const maxAllowedTime = Math.min(currentTxTime, Date.now()) + 60 * 1000;
+    if (parsedDate.getTime() > maxAllowedTime) {
+      res.status(400);
+      throw new Error('Future dates are not allowed. You can only select the present (same day) or past dates.');
+    }
+    parsedTransactionDate = parsedDate;
+    transaction.transactionDate = parsedDate;
+  }
+
   if (cashAmount !== undefined || onlineAmount !== undefined || paymentMethod !== undefined) {
     const finalMethod = paymentMethod !== undefined ? paymentMethod : transaction.paymentMethod;
     const finalTotal = items ? transaction.totalAmount : transaction.totalAmount; // totalAmount was updated above if items was provided
@@ -1151,6 +1169,48 @@ const updateTransaction = asyncHandler(async (req, res) => {
   }
 
   const updatedTransaction = await transaction.save();
+
+  if (parsedTransactionDate) {
+    // Keep createdAt synchronized on the MongoDB document as well
+    try {
+      await Transaction.collection.updateOne(
+        { _id: transaction._id },
+        { $set: { createdAt: parsedTransactionDate } }
+      );
+      updatedTransaction.createdAt = parsedTransactionDate;
+    } catch (syncErr) {
+      console.warn('Failed to sync createdAt on transaction:', syncErr.message);
+    }
+
+    // Record audit log for date modification
+    try {
+      const { UserAudit } = require('../models/auditLogModel');
+      const staffName = updatedBy?.name || (req.user && req.user.name) || 'Administrator';
+      const staffEmpNo = updatedBy?.empNo || (req.user && req.user.empNo) || '';
+      const staffRole = updatedBy?.role || (req.user && req.user.role) || 'Administrator';
+
+      await UserAudit.create({
+        userId: updatedBy?._id || null,
+        userName: staffName,
+        empNo: staffEmpNo,
+        userRole: staffRole,
+        event: 'transaction_date_update',
+        action: 'Update Transaction Date',
+        description: `Updated date for ${transaction.transactionId} to ${parsedTransactionDate.toLocaleDateString('en-IN')}`,
+        loginTime: new Date(),
+        ip: req.ip || req.headers['x-forwarded-for'] || '',
+        userAgent: req.headers['user-agent'] || '',
+        status: 'success',
+        details: {
+          transactionId: transaction.transactionId,
+          newDate: parsedTransactionDate,
+        }
+      });
+    } catch (auditErr) {
+      console.warn('Audit log creation failed for transaction date update:', auditErr.message);
+    }
+  }
+
   res.status(200).json(updatedTransaction);
 });
 
