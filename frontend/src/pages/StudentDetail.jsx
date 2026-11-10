@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, Package, Receipt, History, Calendar, DollarSign, Printer, Lock, Loader2 } from 'lucide-react';
+import { ArrowLeft, User, Package, Receipt, History, Calendar, DollarSign, Printer, Lock, Loader2, Pencil, X, Clock } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import StudentReceiptModal from './StudentReceipt.jsx';
+import EditTransactionDateModal from '../components/EditTransactionDateModal';
 import { apiUrl } from '../utils/api';
 import { canRecordCounterTransactions } from '../utils/permissions';
 import {
@@ -11,6 +12,17 @@ import {
   getProductYears,
   isAddOnProductForStudent,
 } from '../utils/productApplicability';
+
+const toLocalDateInput = (date) => {
+  if (!date) return '';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = pad(d.getMonth() + 1);
+  const day = pad(d.getDate());
+  return `${year}-${month}-${day}`;
+};
 
 const formatKitApplicability = (product) => {
   if (!product?.isSet) return null;
@@ -54,6 +66,45 @@ const StudentDetail = ({
   const canManageTransactions =
     currentUser?.role === 'Administrator' ||
     canRecordCounterTransactions(currentUser?.permissions || []);
+
+  const isSuperAdmin =
+    currentUser?.role === 'Administrator' ||
+    currentUser?.name === 'superadmin' ||
+    currentUser?.name === 'Administrator';
+
+  const [editingTransaction, setEditingTransaction] = useState(null);
+
+  const handleOpenDateEdit = (transaction) => {
+    setEditingTransaction(transaction);
+  };
+
+  const handleCloseDateEdit = () => {
+    setEditingTransaction(null);
+  };
+
+  const handleDateUpdated = async (updated, finalDate) => {
+    const transactionId = updated._id || updated.id;
+    setRawTransactions((prev) =>
+      prev.map((t) =>
+        (t._id || t.id) === transactionId
+          ? { ...t, ...updated, transactionDate: finalDate.toISOString(), createdAt: finalDate.toISOString() }
+          : t
+      )
+    );
+
+    const studentId = String(student?.id || student?._id || '');
+    if (studentId && transactionsCache.current) {
+      transactionsCache.current.delete(studentId);
+    }
+
+    setComponentUpdateStatus({
+      type: 'success',
+      message: `Transaction date for ${updated.transactionId || editingTransaction?.transactionId} updated successfully.`,
+    });
+
+    setEditingTransaction(null);
+    await fetchStudentTransactions(true);
+  };
 
   const normalizeCourse = (value) => {
     if (!value) return '';
@@ -1101,6 +1152,17 @@ const StudentDetail = ({
                                 </div>
                               </div>
                               <div className="ml-4 flex items-center gap-2">
+                                {isSuperAdmin && !transaction.isPending && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenDateEdit(transaction)}
+                                    className="px-2.5 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors no-print"
+                                    title="Edit Transaction Date (Super Admin Only)"
+                                  >
+                                    <Pencil size={13} />
+                                    Edit Date
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => triggerPrint()}
                                   className="px-3 py-1.5 bg-blue-900 text-white hover:bg-blue-800 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-colors no-print border border-blue-200"
@@ -1515,6 +1577,18 @@ const StudentDetail = ({
           />
         )
       }
+
+      {/* Edit Transaction Date Modal (Super Admin Only) */}
+      {isSuperAdmin && (
+        <EditTransactionDateModal
+          isOpen={Boolean(editingTransaction)}
+          transaction={editingTransaction}
+          recipientName={student?.name}
+          currentUser={currentUser}
+          onClose={handleCloseDateEdit}
+          onDateUpdated={handleDateUpdated}
+        />
+      )}
     </div >
   );
 };

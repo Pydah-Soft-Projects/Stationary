@@ -1,10 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, Package, Receipt, History, Calendar, DollarSign, Printer, Loader2, Briefcase } from 'lucide-react';
+import { ArrowLeft, User, Package, Receipt, History, Calendar, DollarSign, Printer, Loader2, Briefcase, Pencil, X, Clock } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { apiUrl } from '../utils/api';
 import EmployeeReceiptModal from './EmployeeReceiptModal';
+import EditTransactionDateModal from '../components/EditTransactionDateModal';
 import { canRecordCounterTransactions } from '../utils/permissions';
+
+const toLocalDateInput = (date) => {
+    if (!date) return '';
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n) => String(n).padStart(2, '0');
+    const year = d.getFullYear();
+    const month = pad(d.getMonth() + 1);
+    const day = pad(d.getDate());
+    return `${year}-${month}-${day}`;
+};
 
 const EmployeeDetail = ({ products = [], setProducts, currentUser, isOnline }) => {
     const { id } = useParams();
@@ -24,6 +36,41 @@ const EmployeeDetail = ({ products = [], setProducts, currentUser, isOnline }) =
     const canManageTransactions =
         currentUser?.role === 'Administrator' ||
         canRecordCounterTransactions(currentUser?.permissions || []);
+
+    const isSuperAdmin =
+        currentUser?.role === 'Administrator' ||
+        currentUser?.name === 'superadmin' ||
+        currentUser?.name === 'Administrator';
+
+    const [editingTransaction, setEditingTransaction] = useState(null);
+    const [statusMessage, setStatusMessage] = useState({ type: '', text: '' });
+
+    const handleOpenDateEdit = (transaction) => {
+        setEditingTransaction(transaction);
+    };
+
+    const handleCloseDateEdit = () => {
+        setEditingTransaction(null);
+    };
+
+    const handleDateUpdated = async (updated, finalDate) => {
+        const transactionId = updated._id || updated.id;
+        setRawTransactions((prev) =>
+            prev.map((t) =>
+                (t._id || t.id) === transactionId
+                    ? { ...t, ...updated, transactionDate: finalDate.toISOString(), createdAt: finalDate.toISOString() }
+                    : t
+            )
+        );
+
+        setStatusMessage({
+            type: 'success',
+            text: `Transaction date for ${updated.transactionId || editingTransaction?.transactionId} updated successfully.`,
+        });
+
+        setEditingTransaction(null);
+        await fetchEmployeeTransactions(true);
+    };
 
     // Fetch employee details
     const fetchEmployee = useCallback(async () => {
@@ -314,7 +361,7 @@ const EmployeeDetail = ({ products = [], setProducts, currentUser, isOnline }) =
                                                             <div className="flex items-center gap-4 text-xs text-gray-600">
                                                                 <div className="flex items-center gap-1">
                                                                     <Calendar size={12} />
-                                                                    <span>{new Date(transaction.createdAt).toLocaleDateString(undefined, {
+                                                                    <span>{new Date(transaction.transactionDate || transaction.createdAt).toLocaleDateString(undefined, {
                                                                         month: 'short',
                                                                         day: 'numeric',
                                                                         year: 'numeric',
@@ -328,7 +375,18 @@ const EmployeeDetail = ({ products = [], setProducts, currentUser, isOnline }) =
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        <div className="flex items-center gap-4">
+                                                        <div className="flex items-center gap-2">
+                                                            {isSuperAdmin && (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleOpenDateEdit(transaction)}
+                                                                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors text-xs font-semibold shadow-sm no-print"
+                                                                    title="Edit Transaction Date (Super Admin Only)"
+                                                                >
+                                                                    <Pencil size={13} />
+                                                                    Edit Date
+                                                                </button>
+                                                            )}
                                                             <button
                                                                 onClick={() => triggerPrint()}
                                                                 className="flex items-center gap-2 px-3 py-1.5 bg-blue-900 text-white rounded-lg hover:bg-blue-800 transition-colors text-xs font-semibold shadow-sm no-print"
@@ -507,6 +565,18 @@ const EmployeeDetail = ({ products = [], setProducts, currentUser, isOnline }) =
                     />
                 )
             }
+
+            {/* Edit Transaction Date Modal (Super Admin Only) */}
+            {isSuperAdmin && (
+                <EditTransactionDateModal
+                    isOpen={Boolean(editingTransaction)}
+                    transaction={editingTransaction}
+                    recipientName={employee?.name}
+                    currentUser={currentUser}
+                    onClose={handleCloseDateEdit}
+                    onDateUpdated={handleDateUpdated}
+                />
+            )}
         </div >
     );
 };
