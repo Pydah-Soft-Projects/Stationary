@@ -253,7 +253,7 @@ const getStudentDues = asyncHandler(async (req, res) => {
                 { 'student.studentId': { $in: distinctIds } }
             ]
         })
-            .select('student.sqlId student.studentId items.name items.productId items.isSet items.status items.setComponents') 
+            .select('isPaid student.sqlId student.studentId items.name items.productId items.isSet items.status items.setComponents') 
             .lean();
         console.log(`[Dues] FetchTransactions took ${Date.now() - txnStart}ms`);
 
@@ -276,39 +276,30 @@ const getStudentDues = asyncHandler(async (req, res) => {
         transactions.forEach(txn => {
             const sqlId = txn.student?.sqlId ? String(txn.student.sqlId).trim() : null;
             const admNo = txn.student?.studentId ? String(txn.student.studentId).trim() : null;
+            const studentKeys = [sqlId, admNo].filter(Boolean);
 
-            if (!sqlId && !admNo) return;
+            if (studentKeys.length === 0) return;
 
             if (txn.items) {
                 txn.items.forEach(item => {
-                    // Logic Update: Only count fulfilled items as Received.
-                    // Items with 'partial' status (out of stock) are NOT considered received.
-                    if (item.status === 'partial') return;
+                    // Exclude paid kits where some components were not taken (partial status):
+                    // Students who already paid for a kit (with untaken components tracked in Zero-Stock Dues)
+                    // should not appear in the payment due list for that kit.
+                    const isPaidPartialKit = Boolean(txn.isPaid && item.isSet && item.status === 'partial');
+                    if (item.status === 'partial' && !isPaidPartialKit) return;
 
-                    if (sqlId) {
-                        addItem(sqlId, item.name);
-                        if (item.productId) addItem(sqlId, `id:${item.productId}`);
-                        
-                        // NEW: If it's a kit, also mark components as received
+                    studentKeys.forEach(sid => {
+                        addItem(sid, item.name);
+                        if (item.productId) addItem(sid, `id:${item.productId}`);
+
+                        // If it's a kit, also mark taken components as received
                         if (item.isSet && item.setComponents) {
                             item.setComponents.forEach(comp => {
-                                if (comp.taken && comp.productId) addItem(sqlId, `id:${comp.productId}`);
-                                if (comp.taken && comp.name) addItem(sqlId, comp.name);
+                                if (comp.taken && comp.productId) addItem(sid, `id:${comp.productId}`);
+                                if (comp.taken && comp.name) addItem(sid, comp.name);
                             });
                         }
-                    }
-                    if (admNo) {
-                        addItem(admNo, item.name);
-                        if (item.productId) addItem(admNo, `id:${item.productId}`);
-
-                        // NEW: If it's a kit, also mark components as received
-                        if (item.isSet && item.setComponents) {
-                            item.setComponents.forEach(comp => {
-                                if (comp.taken && comp.productId) addItem(admNo, `id:${comp.productId}`);
-                                if (comp.taken && comp.name) addItem(admNo, comp.name);
-                            });
-                        }
-                    }
+                    });
                 });
             }
         });
