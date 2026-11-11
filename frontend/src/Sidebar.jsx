@@ -174,15 +174,29 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
       `}>
 
         {/* Header Section */}
-        <div className="p-4 border-b border-white/10 bg-black/15">
-          <div className="flex items-center justify-between">
-            {sidebarOpen && (
-              <div className="flex items-center gap-3">
-                <div className="flex flex-col leading-tight">
-                  <span className="text-lg font-bold text-sidebar-text">Campo</span>
-                  <span className="text-sm text-sidebar-muted font-medium">Stationery Management</span>
+        <div className="px-3.5 py-3 border-b border-white/10 bg-black/15">
+          <div className={`flex items-center ${!sidebarOpen && !isMobileProp ? 'flex-col gap-2' : 'justify-between'}`}>
+            {sidebarOpen ? (
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex flex-col leading-tight min-w-0">
+                  <img
+                    src="/campo-logos/campo_logo_transparent_hq.png"
+                    alt="Campo"
+                    className="h-7 w-auto object-contain object-left"
+                  />
+                  <span className="text-[11px] text-sidebar-muted font-medium tracking-wide mt-0.5">
+                    Stationery Management
+                  </span>
                 </div>
               </div>
+            ) : (
+              !isMobileProp && (
+                <img
+                  src="/campo-logos/favicon.svg"
+                  alt="Campo"
+                  className="w-8 h-8 rounded-lg shadow-sm flex-shrink-0"
+                />
+              )
             )}
 
             {/* Toggle Button */}
@@ -196,7 +210,7 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
               </button>
             ) : (
               <button
-                className="w-7 h-7 bg-primary text-white border border-primary-hover flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-primary-hover hover:scale-105 shadow-sm rounded"
+                className="w-7 h-7 bg-primary text-white border border-primary-hover flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-primary-hover hover:scale-105 shadow-sm rounded flex-shrink-0"
                 onClick={handleToggleSidebar}
                 title={!sidebarOpen ? 'Expand sidebar' : 'Collapse sidebar'}
               >
@@ -207,8 +221,8 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
         </div>
 
         {/* Navigation Menu */}
-        <div className="flex-1 py-6 overflow-y-auto custom-scrollbar">
-          <ul className="space-y-2 px-3">
+        <div className="flex-1 py-2.5 overflow-y-auto custom-scrollbar">
+          <ul className="space-y-0.5 px-2.5">
             {menuItems.map((item) => {
               const IconComponent = item.icon;
               const isActive = item.exact ? location.pathname === item.path : location.pathname.startsWith(item.path);
@@ -229,16 +243,16 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
                           }
                         }}
                         className={`
-                          flex-1 flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-xl transition-all duration-200 relative group
+                          flex-1 flex items-center gap-2.5 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 relative group
                           ${isParentActive
-                            ? 'bg-primary text-white shadow-lg'
+                            ? 'bg-primary text-white shadow-md'
                             : 'text-sidebar-muted hover:bg-white/10 hover:text-sidebar-text hover:translate-x-1'
                           }
                           ${!sidebarOpen ? 'justify-center px-2' : ''}
                         `}
                         title={!sidebarOpen ? item.label : ''}
                       >
-                        <IconComponent size={20} className="flex-shrink-0" />
+                        <IconComponent size={18} className="flex-shrink-0" />
                         {sidebarOpen && <span className="truncate flex-1">{item.label}</span>}
                         {sidebarOpen && stockSubItems.length > 0 && (
                           <span
@@ -247,24 +261,24 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
                               e.stopPropagation();
                               setStockDropdownOpen(prev => !prev);
                             }}
-                            className="p-1 hover:bg-white/20 rounded transition-colors ml-1"
+                            className="p-0.5 hover:bg-white/20 rounded transition-colors ml-1"
                             title={stockDropdownOpen ? 'Collapse menu' : 'Expand menu'}
                           >
                             <ChevronDown
-                              size={16}
+                              size={15}
                               className={`transition-transform duration-200 ${stockDropdownOpen ? 'rotate-180' : ''}`}
                             />
                           </span>
                         )}
                         {isParentActive && sidebarOpen && (
-                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white/70 rounded-r-full"></div>
+                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-white/70 rounded-r-full"></div>
                         )}
                       </NavLink>
                     </div>
 
                     {/* Submenu Dropdown under Academic Stock */}
                     {sidebarOpen && stockDropdownOpen && stockSubItems.length > 0 && (
-                      <ul className="mt-1.5 ml-4 pl-3 border-l-2 border-white/20 space-y-1 py-1">
+                      <ul className="mt-0.5 ml-4 pl-2.5 border-l-2 border-white/20 space-y-0.5 py-0.5">
                         {stockSubItems.map((subItem) => {
                           const isSubActive = isParentActive && currentTab === subItem.tabId;
                           const SubIcon = subItem.icon;
@@ -277,7 +291,7 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
                                   if (isMobileProp) setSidebarOpen(false);
                                 }}
                                 className={`
-                                  flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg transition-all duration-150
+                                  flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all duration-150
                                   ${isSubActive
                                     ? 'bg-primary text-white shadow-sm font-semibold'
                                     : 'text-sidebar-muted hover:bg-white/10 hover:text-sidebar-text'
@@ -302,19 +316,19 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
                     to={item.path}
                     end={item.exact}
                     className={`
-                      flex items-center gap-3 px-3 py-3 text-sm font-medium rounded-xl transition-all duration-200 relative group
+                      flex items-center gap-2.5 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 relative group
                       ${isActive
-                        ? 'bg-primary text-white shadow-lg'
+                        ? 'bg-primary text-white shadow-md'
                         : 'text-sidebar-muted hover:bg-white/10 hover:text-sidebar-text hover:translate-x-1'
                       }
                       ${!sidebarOpen ? 'justify-center px-2' : ''}
                     `}
                     title={!sidebarOpen ? item.label : ''}
                   >
-                    <IconComponent size={20} className="flex-shrink-0" />
+                    <IconComponent size={18} className="flex-shrink-0" />
                     {sidebarOpen && <span className="truncate">{item.label}</span>}
                     {isActive && sidebarOpen && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white/70 rounded-r-full"></div>
+                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-white/70 rounded-r-full"></div>
                     )}
                   </NavLink>
                 </li>
@@ -324,10 +338,10 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
         </div>
 
         {/* Footer Section - User Info & Logout */}
-        <div className={`border-t border-white/10 bg-black/10 ${sidebarOpen ? 'p-4' : 'p-2'}`}>
+        <div className={`border-t border-white/10 bg-black/10 ${sidebarOpen ? 'p-3' : 'p-2'}`}>
           {/* User Info */}
           {currentUser && (
-            <div className={`flex items-center bg-white/10 border border-white/15 rounded-xl text-sidebar-text text-sm font-medium ${sidebarOpen ? 'gap-3 p-3' : 'justify-center p-2'
+            <div className={`flex items-center bg-white/10 border border-white/15 rounded-xl text-sidebar-text text-sm font-medium ${sidebarOpen ? 'gap-2.5 p-2.5' : 'justify-center p-2'
               }`}>
               {sidebarOpen && (
                 <>

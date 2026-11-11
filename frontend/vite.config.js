@@ -16,7 +16,18 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['Pydah_LOGO.png', 'vite.svg', 'offline.html'],
+        includeAssets: [
+          'campo-logos/favicon.ico',
+          'campo-logos/favicon.svg',
+          'campo-logos/favicon-16x16.png',
+          'campo-logos/favicon-32x32.png',
+          'campo-logos/apple-touch-icon.png',
+          'campo-logos/icon-192.png',
+          'campo-logos/icon-512.png',
+          'campo-logos/og-image.png',
+          'campo-logos/campo_logo_transparent_hq.png',
+          'offline.html',
+        ],
         manifest: {
           name: 'Campo Stationery Management',
           short_name: 'Campo Stationery',
@@ -29,17 +40,17 @@ export default defineConfig(({ mode }) => {
           start_url: '/',
           icons: [
             {
-              src: 'Pydah_LOGO.png',
+              src: 'campo-logos/icon-192.png',
               sizes: '192x192',
               type: 'image/png',
             },
             {
-              src: 'Pydah_LOGO.png',
+              src: 'campo-logos/icon-512.png',
               sizes: '512x512',
               type: 'image/png',
             },
             {
-              src: 'Pydah_LOGO.png',
+              src: 'campo-logos/icon-512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable any',
