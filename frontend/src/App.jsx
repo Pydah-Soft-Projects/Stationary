@@ -627,7 +627,7 @@ function App() {
             />
             <main className={`
             flex-1 min-h-screen bg-background text-text-main flex justify-center items-start transition-all duration-300
-            ${isMobile ? 'ml-0' : (sidebarOpen ? 'ml-52' : 'ml-20')}
+            ${isMobile ? 'ml-0' : (sidebarOpen ? 'ml-64' : 'ml-20')}
             ${isMobile ? 'pt-20 px-4' : 'px-8'}
           `}>
               {isMobile && (

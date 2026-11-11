@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, PlusCircle, Users, List, Settings, LogOut, ChevronLeft, ChevronRight, Menu, UserPlus, X, User, GraduationCap, Receipt, ClipboardList, ClipboardCheck, ArrowRightLeft, ShoppingCart, Briefcase, TrendingUp, ShieldCheck, ChevronDown, Package, Plus, Building2 } from 'lucide-react';
+import {
+  LayoutGrid, GraduationCap, Briefcase, Building2, Package,
+  ArrowRightLeft, ShoppingCart, Receipt, TrendingUp, ClipboardList,
+  UserPlus, ClipboardCheck, ShieldCheck, Settings, ChevronLeft,
+  ChevronRight, ChevronDown, LogOut, X, Plus, List
+} from 'lucide-react';
 import { hasViewAccess } from './utils/permissions';
 import { apiUrl } from './utils/api';
 
@@ -107,273 +112,382 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
     { tabId: 'vendors', label: 'Vendor Management', icon: Building2, canAccess: canAccessVendors },
   ].filter(item => item.canAccess);
 
-  // Map sidebar items with permission keys
-  const allMenuItems = [
-    { path: '/', label: 'Dashboard', icon: Home, exact: true, permissionKey: 'dashboard' },
-    // { path: '/student-management', label: 'Manage Students', icon: Users, permissionKey: 'student-management' }, // REMOVED
-    { path: '/students-dashboard', label: 'Student Dashboard', icon: GraduationCap, permissionKey: 'course-dashboard' },
-    { path: '/employees-dashboard', label: 'Employee Dashboard', icon: Briefcase, permissionKey: 'employee-dashboard' },
-    { path: '/sub-admin-management', label: 'User Management', icon: UserPlus, superAdminOnly: true },
-    { path: '/courses', label: 'College and Courses', icon: GraduationCap, permissionKey: 'courses' },
-    { path: '/manage-stock', label: 'Academic Stock', icon: List, permissionKeys: ['stock-products', 'stock-add', 'stock-entries', 'stock-vendors', 'manage-stock'] },
-    { path: '/stock-transfers', label: 'Stock Transfers', icon: ArrowRightLeft, permissionKey: 'stock-transfers' },
-    { path: '/general-purchase', label: 'General Stock', icon: ShoppingCart, permissionKey: 'general-purchase' },
-    { path: '/transactions', label: 'Reports', icon: Receipt, permissionKeys: ['reports-daily', 'reports-monthly', 'reports-stock', 'transactions'] },
-    { path: '/profit-report', label: 'Profit Report', icon: TrendingUp, permissionKey: 'profit-report' },
-    { path: '/student-due', label: 'Student Due', icon: ClipboardList, permissionKeys: ['student-due', 'reports-daily', 'reports-monthly', 'reports-stock', 'transactions'] },
-    { path: '/audit-logs', label: 'Audit Logs', icon: ClipboardCheck, permissionKeys: ['audit-log-entry', 'audit-log-approval', 'audit-logs'] },
-    { path: '/user-audits', label: 'User Audit', icon: ShieldCheck, superAdminOnly: true },
-    { path: '/settings', label: 'Settings', icon: Settings, permissionKey: 'settings' },
-  ];
-
-  // Filter menu items based on user type and permissions
-  const menuItems = allMenuItems.filter(item => {
-    // Super admin can see everything except sub-admin management is always visible for them
-    if (isSuperAdmin) {
-      return true; // Super admin sees all items
-    }
-    // Sub-admin: filter by permissions
+  // Filter permission helper
+  const canAccessItem = (item) => {
+    if (isSuperAdmin) return true;
     if (isSubAdmin) {
-      // If item requires super admin only, hide it
       if (item.superAdminOnly) return false;
-      // If item has permission key, check if sub-admin has that permission (view or full)
       if (item.permissionKeys) {
         return item.permissionKeys.some(key => hasViewAccess(subAdminPermissions, key));
       }
       if (item.permissionKey) {
         return hasViewAccess(subAdminPermissions, item.permissionKey);
       }
-      // Items without permission key are not accessible to sub-admins
       return false;
     }
-    // Default: show all non-super-admin-only items
     return !item.superAdminOnly;
-  });
+  };
+
+  // Structured Section Groups following Campo Design System
+  const sections = [
+    {
+      title: 'MAIN',
+      items: [
+        { path: '/', label: 'Dashboard', icon: LayoutGrid, exact: true, permissionKey: 'dashboard' },
+      ]
+    },
+    {
+      title: 'MANAGEMENT',
+      items: [
+        { path: '/students-dashboard', label: 'Student Dashboard', icon: GraduationCap, permissionKey: 'course-dashboard' },
+        { path: '/employees-dashboard', label: 'Employee Dashboard', icon: Briefcase, permissionKey: 'employee-dashboard' },
+        { path: '/courses', label: 'College and Courses', icon: Building2, permissionKey: 'courses' },
+      ]
+    },
+    {
+      title: 'OPERATIONS',
+      items: [
+        { path: '/manage-stock', label: 'Academic Stock', icon: Package, permissionKeys: ['stock-products', 'stock-add', 'stock-entries', 'stock-vendors', 'manage-stock'] },
+        { path: '/stock-transfers', label: 'Stock Transfers', icon: ArrowRightLeft, permissionKey: 'stock-transfers' },
+        { path: '/general-purchase', label: 'General Stock', icon: ShoppingCart, permissionKey: 'general-purchase' },
+      ]
+    },
+    {
+      title: 'REPORTS',
+      items: [
+        { path: '/transactions', label: 'Reports', icon: Receipt, permissionKeys: ['reports-daily', 'reports-monthly', 'reports-stock', 'transactions'] },
+        { path: '/profit-report', label: 'Profit Report', icon: TrendingUp, permissionKey: 'profit-report' },
+        { path: '/student-due', label: 'Student Due', icon: ClipboardList, permissionKeys: ['student-due', 'reports-daily', 'reports-monthly', 'reports-stock', 'transactions'] },
+      ]
+    },
+    {
+      title: 'ADMINISTRATION',
+      items: [
+        { path: '/sub-admin-management', label: 'User Management', icon: UserPlus, superAdminOnly: true },
+        { path: '/audit-logs', label: 'Audit Logs', icon: ClipboardCheck, permissionKeys: ['audit-log-entry', 'audit-log-approval', 'audit-logs'] },
+        { path: '/user-audits', label: 'User Audit', icon: ShieldCheck, superAdminOnly: true },
+        { path: '/settings', label: 'Settings', icon: Settings, permissionKey: 'settings' },
+      ]
+    }
+  ];
 
   const handleToggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
+
+  const displayName = isSuperAdmin
+    ? 'System Superadmin'
+    : (employeeName || currentUser?.employeeName || currentUser?.employee_name || currentUser?.name || 'User');
+  const userInitial = displayName.trim().charAt(0).toUpperCase() || 'S';
+  const roleTitle = isSuperAdmin ? 'Superadmin' : (currentUser?.role || 'Administrator');
 
   return (
     <>
       {/* Mobile backdrop */}
       {isMobileProp && sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm z-40"
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
       {/* Main Sidebar Container */}
-      <aside className={`
-        sidebar-modern fixed left-0 top-0 h-full bg-sidebar text-sidebar-text border-r border-border flex flex-col z-50 shadow-2xl transition-all duration-300
-        ${isMobileProp
-          ? `w-60 ${!sidebarOpen ? '-translate-x-full' : 'translate-x-0'}`
-          : `${!sidebarOpen ? 'w-20' : 'w-60'}`
-        }
-      `}>
-
-        {/* Header Section */}
-        <div className="px-3.5 py-3 border-b border-white/10 bg-black/15">
-          <div className={`flex items-center ${!sidebarOpen && !isMobileProp ? 'flex-col gap-2' : 'justify-between'}`}>
-            {sidebarOpen ? (
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="flex flex-col leading-tight min-w-0">
-                  <img
-                    src="/campo-logos/campo_logo_transparent_hq.png"
-                    alt="Campo"
-                    className="h-7 w-auto object-contain object-left"
-                  />
-                  <span className="text-[11px] text-sidebar-muted font-medium tracking-wide mt-0.5">
-                    Stationery Management
-                  </span>
-                </div>
-              </div>
+      <aside
+        className={`
+          sidebar-modern fixed top-0 left-0 bottom-0 z-40 border-r flex flex-col transition-all duration-300
+          ${isMobileProp
+            ? `w-64 ${!sidebarOpen ? '-translate-x-full' : 'translate-x-0'}`
+            : `${!sidebarOpen ? 'w-20' : 'w-64'}`
+          }
+        `}
+        style={{
+          backgroundColor: 'var(--sidebar)',
+          color: 'var(--sidebar-text)',
+          borderColor: 'var(--border)',
+          fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"
+        }}
+      >
+        {/* Floating Circular Collapse Button */}
+        {!isMobileProp && (
+          <button
+            type="button"
+            onClick={handleToggleSidebar}
+            className="absolute -right-3 top-[106px] z-50 w-6 h-6 rounded-full shadow-md border flex items-center justify-center cursor-pointer transition-transform hover:scale-110 outline-none"
+            style={{
+              backgroundColor: 'var(--surface)',
+              borderColor: 'var(--border)'
+            }}
+            title={!sidebarOpen ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={!sidebarOpen ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {!sidebarOpen ? (
+              <ChevronRight size={14} className="stroke-[2.5]" style={{ color: 'var(--sidebar)' }} />
             ) : (
-              !isMobileProp && (
-                <img
-                  src="/campo-logos/favicon.svg"
-                  alt="Campo"
-                  className="w-8 h-8 rounded-lg shadow-sm flex-shrink-0"
-                />
-              )
+              <ChevronLeft size={14} className="stroke-[2.5]" style={{ color: 'var(--sidebar)' }} />
             )}
+          </button>
+        )}
 
-            {/* Toggle Button */}
-            {isMobileProp ? (
-              <button
-                className="w-8 h-8 rounded-lg bg-white/15 border border-white/20 flex items-center justify-center cursor-pointer text-sidebar-text transition-all duration-200 hover:bg-white/25 hover:scale-105 shadow-sm"
-                onClick={handleToggleSidebar}
-                title="Close menu"
+        {/* Top Header */}
+        <div
+          className="flex flex-col items-center justify-center text-center pt-6 pb-4 border-b relative px-3"
+          style={{ borderColor: 'var(--border)' }}
+        >
+          {isMobileProp && sidebarOpen && (
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="absolute right-3 top-4 p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+              style={{ color: 'var(--sidebar-text)' }}
+              title="Close menu"
+            >
+              <X size={18} />
+            </button>
+          )}
+
+          {sidebarOpen ? (
+            <div className="flex flex-col items-center justify-center text-center">
+              <img
+                src="/campo-logos/campo_logo_transparent_hq.png"
+                alt="Campo"
+                className="h-7 w-auto object-contain max-w-[120px]"
+              />
+              <span
+                className="text-xs font-medium tracking-wide mt-1.5"
+                style={{ color: 'var(--sidebar-muted)' }}
               >
-                <X size={20} />
-              </button>
-            ) : (
-              <button
-                className="w-7 h-7 bg-primary text-white border border-primary-hover flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-primary-hover hover:scale-105 shadow-sm rounded flex-shrink-0"
-                onClick={handleToggleSidebar}
-                title={!sidebarOpen ? 'Expand sidebar' : 'Collapse sidebar'}
-              >
-                {!sidebarOpen ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-              </button>
-            )}
-          </div>
+                Stationery Management
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center">
+              <img
+                src="/campo-logos/campo_logo_transparent_hq.png"
+                alt="Campo"
+                className="h-6 w-auto object-contain max-w-[60px]"
+              />
+            </div>
+          )}
         </div>
 
         {/* Navigation Menu */}
-        <div className="flex-1 py-2.5 overflow-y-auto custom-scrollbar">
-          <ul className="space-y-0.5 px-2.5">
-            {menuItems.map((item) => {
-              const IconComponent = item.icon;
-              const isActive = item.exact ? location.pathname === item.path : location.pathname.startsWith(item.path);
+        <div className="flex-1 py-3 overflow-y-auto custom-scrollbar px-3 space-y-4">
+          {sections.map((section, idx) => {
+            const accessibleItems = section.items.filter(canAccessItem);
+            if (accessibleItems.length === 0) return null;
 
-              if (item.path === '/manage-stock') {
-                const isParentActive = location.pathname.startsWith('/manage-stock');
-                return (
-                  <li key={item.path} className="flex flex-col">
-                    <div className="flex items-center relative">
-                      <NavLink
-                        to="/manage-stock"
-                        onClick={() => {
-                          if (!sidebarOpen) {
-                            setSidebarOpen(true);
-                            setStockDropdownOpen(true);
-                          } else {
-                            setStockDropdownOpen(prev => (isParentActive ? !prev : true));
-                          }
-                        }}
-                        className={`
-                          flex-1 flex items-center gap-2.5 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 relative group
-                          ${isParentActive
-                            ? 'bg-primary text-white shadow-md'
-                            : 'text-sidebar-muted hover:bg-white/10 hover:text-sidebar-text hover:translate-x-1'
-                          }
-                          ${!sidebarOpen ? 'justify-center px-2' : ''}
-                        `}
-                        title={!sidebarOpen ? item.label : ''}
-                      >
-                        <IconComponent size={18} className="flex-shrink-0" />
-                        {sidebarOpen && <span className="truncate flex-1">{item.label}</span>}
-                        {sidebarOpen && stockSubItems.length > 0 && (
-                          <span
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setStockDropdownOpen(prev => !prev);
-                            }}
-                            className="p-0.5 hover:bg-white/20 rounded transition-colors ml-1"
-                            title={stockDropdownOpen ? 'Collapse menu' : 'Expand menu'}
-                          >
-                            <ChevronDown
-                              size={15}
-                              className={`transition-transform duration-200 ${stockDropdownOpen ? 'rotate-180' : ''}`}
-                            />
-                          </span>
-                        )}
-                        {isParentActive && sidebarOpen && (
-                          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-white/70 rounded-r-full"></div>
-                        )}
-                      </NavLink>
-                    </div>
-
-                    {/* Submenu Dropdown under Academic Stock */}
-                    {sidebarOpen && stockDropdownOpen && stockSubItems.length > 0 && (
-                      <ul className="mt-0.5 ml-4 pl-2.5 border-l-2 border-white/20 space-y-0.5 py-0.5">
-                        {stockSubItems.map((subItem) => {
-                          const isSubActive = isParentActive && currentTab === subItem.tabId;
-                          const SubIcon = subItem.icon;
-
-                          return (
-                            <li key={subItem.tabId}>
-                              <NavLink
-                                to={`/manage-stock?tab=${subItem.tabId}`}
-                                onClick={() => {
-                                  if (isMobileProp) setSidebarOpen(false);
-                                }}
-                                className={`
-                                  flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium rounded-md transition-all duration-150
-                                  ${isSubActive
-                                    ? 'bg-primary text-white shadow-sm font-semibold'
-                                    : 'text-sidebar-muted hover:bg-white/10 hover:text-sidebar-text'
-                                  }
-                                `}
-                              >
-                                <SubIcon size={14} className={`flex-shrink-0 ${isSubActive ? 'text-white' : 'text-sidebar-muted'}`} />
-                                <span className="truncate">{subItem.label}</span>
-                              </NavLink>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </li>
-                );
-              }
-
-              return (
-                <li key={item.path}>
-                  <NavLink
-                    to={item.path}
-                    end={item.exact}
-                    className={`
-                      flex items-center gap-2.5 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 relative group
-                      ${isActive
-                        ? 'bg-primary text-white shadow-md'
-                        : 'text-sidebar-muted hover:bg-white/10 hover:text-sidebar-text hover:translate-x-1'
-                      }
-                      ${!sidebarOpen ? 'justify-center px-2' : ''}
-                    `}
-                    title={!sidebarOpen ? item.label : ''}
+            return (
+              <div key={section.title || idx} className="space-y-1">
+                {sidebarOpen ? (
+                  <div
+                    className="text-[11px] font-bold uppercase tracking-wider px-3 pt-2 pb-1"
+                    style={{ color: 'var(--sidebar-muted)' }}
                   >
-                    <IconComponent size={18} className="flex-shrink-0" />
-                    {sidebarOpen && <span className="truncate">{item.label}</span>}
-                    {isActive && sidebarOpen && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-white/70 rounded-r-full"></div>
-                    )}
-                  </NavLink>
-                </li>
-              );
-            })}
-          </ul>
+                    {section.title}
+                  </div>
+                ) : (
+                  idx > 0 && (
+                    <div
+                      className="my-2 border-t mx-2"
+                      style={{ borderColor: 'var(--border)' }}
+                    />
+                  )
+                )}
+
+                <ul className="space-y-1">
+                  {accessibleItems.map((item) => {
+                    const IconComponent = item.icon;
+                    const isActive = item.exact
+                      ? location.pathname === item.path
+                      : location.pathname.startsWith(item.path);
+
+                    if (item.path === '/manage-stock') {
+                      const isParentActive = location.pathname.startsWith('/manage-stock');
+                      return (
+                        <li key={item.path} className="flex flex-col">
+                          <div className="flex items-center relative">
+                            <NavLink
+                              to="/manage-stock"
+                              onClick={() => {
+                                if (!sidebarOpen) {
+                                  setSidebarOpen(true);
+                                  setStockDropdownOpen(true);
+                                } else {
+                                  setStockDropdownOpen(prev => (isParentActive ? !prev : true));
+                                }
+                              }}
+                              className={`
+                                flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-150 relative group
+                                ${isParentActive ? 'font-semibold shadow-sm' : 'font-medium hover:bg-white/10'}
+                                ${!sidebarOpen ? 'justify-center px-2' : ''}
+                              `}
+                              style={{
+                                backgroundColor: isParentActive ? 'var(--primary)' : 'transparent',
+                                color: 'var(--sidebar-text)'
+                              }}
+                              title={!sidebarOpen ? item.label : ''}
+                            >
+                              <IconComponent
+                                size={19}
+                                className="flex-shrink-0"
+                                style={{ color: isParentActive ? 'var(--sidebar-text)' : 'var(--sidebar-muted)' }}
+                              />
+                              {sidebarOpen && <span className="truncate flex-1">{item.label}</span>}
+                              {sidebarOpen && stockSubItems.length > 0 && (
+                                <span
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setStockDropdownOpen(prev => !prev);
+                                  }}
+                                  className="p-1 hover:bg-white/20 rounded transition-colors ml-1"
+                                  title={stockDropdownOpen ? 'Collapse menu' : 'Expand menu'}
+                                >
+                                  <ChevronDown
+                                    size={15}
+                                    className={`transition-transform duration-200 ${stockDropdownOpen ? 'rotate-180' : ''}`}
+                                  />
+                                </span>
+                              )}
+                            </NavLink>
+                          </div>
+
+                          {/* Submenu Dropdown under Academic Stock */}
+                          {sidebarOpen && stockDropdownOpen && stockSubItems.length > 0 && (
+                            <ul
+                              className="mt-1 ml-5 pl-3 border-l space-y-1 py-1"
+                              style={{ borderColor: 'var(--border)' }}
+                            >
+                              {stockSubItems.map((subItem) => {
+                                const isSubActive = isParentActive && currentTab === subItem.tabId;
+                                const SubIcon = subItem.icon;
+
+                                return (
+                                  <li key={subItem.tabId}>
+                                    <NavLink
+                                      to={`/manage-stock?tab=${subItem.tabId}`}
+                                      onClick={() => {
+                                        if (isMobileProp) setSidebarOpen(false);
+                                      }}
+                                      className={`
+                                        flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg transition-all duration-150
+                                        ${isSubActive ? 'font-semibold shadow-sm' : 'font-medium hover:bg-white/10'}
+                                      `}
+                                      style={{
+                                        backgroundColor: isSubActive ? 'var(--primary)' : 'transparent',
+                                        color: 'var(--sidebar-text)'
+                                      }}
+                                    >
+                                      <SubIcon
+                                        size={14}
+                                        className="flex-shrink-0"
+                                        style={{ color: isSubActive ? 'var(--sidebar-text)' : 'var(--sidebar-muted)' }}
+                                      />
+                                      <span className="truncate">{subItem.label}</span>
+                                    </NavLink>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </li>
+                      );
+                    }
+
+                    return (
+                      <li key={item.path}>
+                        <NavLink
+                          to={item.path}
+                          end={item.exact}
+                          className={`
+                            flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-150 relative group
+                            ${isActive ? 'font-semibold shadow-sm' : 'font-medium hover:bg-white/10'}
+                            ${!sidebarOpen ? 'justify-center px-2' : ''}
+                          `}
+                          style={{
+                            backgroundColor: isActive ? 'var(--primary)' : 'transparent',
+                            color: 'var(--sidebar-text)'
+                          }}
+                          title={!sidebarOpen ? item.label : ''}
+                        >
+                          <IconComponent
+                            size={19}
+                            className="flex-shrink-0"
+                            style={{ color: isActive ? 'var(--sidebar-text)' : 'var(--sidebar-muted)' }}
+                          />
+                          {sidebarOpen && <span className="truncate flex-1">{item.label}</span>}
+                        </NavLink>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
         </div>
 
-        {/* Footer Section - User Info & Logout */}
-        <div className={`border-t border-white/10 bg-black/10 ${sidebarOpen ? 'p-3' : 'p-2'}`}>
-          {/* User Info */}
+        {/* Footer Section - User Info & Logout (Matches 2nd reference image) */}
+        <div className={`mt-auto ${sidebarOpen ? 'p-3 pb-4' : 'p-2 pb-3'}`}>
           {currentUser && (
-            <div className={`flex items-center bg-white/10 border border-white/15 rounded-xl text-sidebar-text text-sm font-medium ${sidebarOpen ? 'gap-2.5 p-2.5' : 'justify-center p-2'
-              }`}>
-              {sidebarOpen && (
+            <div
+              className={`flex items-center rounded-2xl transition-all ${
+                sidebarOpen ? 'px-3.5 py-3 gap-3' : 'p-2 justify-center'
+              }`}
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.08)'
+              }}
+            >
+              {sidebarOpen ? (
                 <>
-                  <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white shadow-md">
-                    <User size={20} />
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0"
+                    style={{
+                      backgroundColor: '#EEF2F6',
+                      color: 'var(--primary)'
+                    }}
+                  >
+                    {userInitial}
                   </div>
-                  <div className="flex items-center justify-between gap-3 flex-1 min-w-0">
-                    <div className="flex flex-col leading-tight flex-1 min-w-0">
-                      <span className="font-semibold text-sm truncate text-sidebar-text" title={isSuperAdmin ? 'Administrator' : (employeeName || currentUser.employeeName || currentUser.employee_name || currentUser.name)}>
-                        {isSuperAdmin ? 'Administrator' : (employeeName || currentUser.employeeName || currentUser.employee_name || currentUser.name)}
+                  <div className="flex items-center justify-between gap-2 flex-1 min-w-0">
+                    <div className="flex flex-col leading-tight min-w-0 flex-1">
+                      <span
+                        className="font-bold text-sm truncate tracking-tight"
+                        style={{ color: 'var(--sidebar-text)' }}
+                        title={displayName}
+                      >
+                        {displayName}
                       </span>
-                      <span className="text-xs text-sidebar-muted truncate">
-                        {isSuperAdmin ? 'Administrator' : 'Sub-Administrator'}
+                      <span
+                        className="text-xs truncate mt-0.5 font-normal"
+                        style={{ color: 'var(--sidebar-muted)' }}
+                      >
+                        {roleTitle}
                       </span>
                     </div>
                     <button
+                      type="button"
                       onClick={onLogout}
-                      className="p-2 rounded-lg bg-white/15 hover:bg-danger hover:border-danger hover:text-white hover:shadow-md transition-all duration-200"
+                      className="p-1 rounded-lg hover:bg-white/10 hover:text-red-400 transition-colors flex-shrink-0 cursor-pointer"
+                      style={{ color: 'var(--sidebar-text)' }}
                       title="Logout"
+                      aria-label="Logout"
                     >
-                      <LogOut size={18} />
+                      <LogOut size={18} strokeWidth={2} />
                     </button>
                   </div>
                 </>
-              )}
-              {!sidebarOpen && (
+              ) : (
                 <button
+                  type="button"
                   onClick={onLogout}
-                  className="p-2 rounded-lg bg-white/15 hover:bg-danger hover:border-danger hover:text-white hover:shadow-md transition-all duration-200 w-full flex items-center justify-center"
-                  title="Logout"
+                  className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm hover:scale-105 transition-transform cursor-pointer"
+                  style={{
+                    backgroundColor: '#EEF2F6',
+                    color: 'var(--primary)'
+                  }}
+                  title={`Logout (${displayName})`}
+                  aria-label={`Logout (${displayName})`}
                 >
-                  <LogOut size={18} />
+                  {userInitial}
                 </button>
               )}
             </div>
