@@ -113,7 +113,7 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
   ].filter(item => item.canAccess);
 
   // Filter permission helper
-  const canAccessItem = (item) => {
+  const isItemPermitted = (item) => {
     if (isSuperAdmin) return true;
     if (isSubAdmin) {
       if (item.superAdminOnly) return false;
@@ -172,15 +172,23 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
     }
   ];
 
+  // Filter sections and items based on user type and permissions; omit empty sections
+  const visibleSections = sections
+    .map(section => ({
+      ...section,
+      items: section.items.filter(isItemPermitted),
+    }))
+    .filter(section => section.items.length > 0);
+
   const handleToggleSidebar = () => {
     setSidebarOpen(!sidebarOpen);
   };
 
   const displayName = isSuperAdmin
-    ? 'System Superadmin'
+    ? 'Administrator'
     : (employeeName || currentUser?.employeeName || currentUser?.employee_name || currentUser?.name || 'User');
-  const userInitial = displayName.trim().charAt(0).toUpperCase() || 'S';
-  const roleTitle = isSuperAdmin ? 'Superadmin' : (currentUser?.role || 'Administrator');
+  const displayRole = isSuperAdmin ? 'Administrator' : (currentUser?.role || 'Sub-Administrator');
+  const userInitial = String(displayName).trim().charAt(0).toUpperCase() || 'U';
 
   return (
     <>
@@ -194,108 +202,99 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
 
       {/* Main Sidebar Container */}
       <aside
+        style={{
+          backgroundColor: 'var(--sidebar, #1E3150)',
+          color: 'var(--sidebar-text, #FFFFFF)',
+          borderColor: 'var(--border)',
+          boxShadow: '4px 0 24px -2px rgba(10, 20, 35, 0.45)',
+          fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif",
+        }}
         className={`
-          sidebar-modern fixed top-0 left-0 bottom-0 z-40 border-r flex flex-col transition-all duration-300
+          sidebar-modern fixed left-0 top-0 h-full border-r flex flex-col z-50 transition-all duration-200
           ${isMobileProp
-            ? `w-64 ${!sidebarOpen ? '-translate-x-full' : 'translate-x-0'}`
-            : `${!sidebarOpen ? 'w-20' : 'w-64'}`
+            ? `w-[256px] ${!sidebarOpen ? '-translate-x-full' : 'translate-x-0'}`
+            : `${!sidebarOpen ? 'w-[80px]' : 'w-[256px]'}`
           }
         `}
-        style={{
-          backgroundColor: 'var(--sidebar)',
-          color: 'var(--sidebar-text)',
-          borderColor: 'var(--border)',
-          fontFamily: "'Plus Jakarta Sans', system-ui, -apple-system, sans-serif"
-        }}
       >
-        {/* Floating Circular Collapse Button */}
+        {/* Floating Circular Collapse Control (Desktop) */}
         {!isMobileProp && (
           <button
             type="button"
             onClick={handleToggleSidebar}
-            className="absolute -right-3 top-[106px] z-50 w-6 h-6 rounded-full shadow-md border flex items-center justify-center cursor-pointer transition-transform hover:scale-110 outline-none"
-            style={{
-              backgroundColor: 'var(--surface)',
-              borderColor: 'var(--border)'
-            }}
             title={!sidebarOpen ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-label={!sidebarOpen ? 'Expand sidebar' : 'Collapse sidebar'}
+            style={{
+              backgroundColor: 'var(--surface, #FFFFFF)',
+              borderColor: 'var(--border)',
+              color: 'var(--text-primary, #1E3150)',
+            }}
+            className="absolute -right-[12px] top-[106px] w-[24px] h-[24px] rounded-full border shadow-md flex items-center justify-center cursor-pointer transition-transform duration-200 hover:scale-105 z-50 outline-none"
           >
-            {!sidebarOpen ? (
-              <ChevronRight size={14} className="stroke-[2.5]" style={{ color: 'var(--sidebar)' }} />
-            ) : (
-              <ChevronLeft size={14} className="stroke-[2.5]" style={{ color: 'var(--sidebar)' }} />
-            )}
+            {!sidebarOpen
+              ? <ChevronRight size={14} strokeWidth={2.5} />
+              : <ChevronLeft size={14} strokeWidth={2.5} />
+            }
           </button>
         )}
 
-        {/* Top Header */}
+        {/* Brand Header Section */}
         <div
-          className="flex flex-col items-center justify-center text-center pt-6 pb-4 border-b relative px-3"
           style={{ borderColor: 'var(--border)' }}
+          className={`relative border-b pt-[24px] pb-[16px] ${sidebarOpen ? 'px-[24px]' : 'px-[8px]'}`}
         >
           {isMobileProp && sidebarOpen && (
             <button
-              onClick={() => setSidebarOpen(false)}
-              className="absolute right-3 top-4 p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-              style={{ color: 'var(--sidebar-text)' }}
+              className="absolute top-3 right-3 w-8 h-8 rounded-lg bg-white/15 border border-white/20 flex items-center justify-center cursor-pointer transition-all duration-200 hover:bg-white/25"
+              onClick={handleToggleSidebar}
               title="Close menu"
+              aria-label="Close menu"
             >
-              <X size={18} />
+              <X size={18} strokeWidth={2} />
             </button>
           )}
 
-          {sidebarOpen ? (
-            <div className="flex flex-col items-center justify-center text-center">
+          <div className="flex flex-col items-center justify-center text-center">
+            {sidebarOpen ? (
+              <>
+                <img
+                  src="/campo-logos/campo_logo_transparent_hq.png"
+                  alt="Campo"
+                  className="h-[28px] max-w-[120px] w-auto object-contain"
+                />
+                <span
+                  style={{ color: 'var(--sidebar-muted, #AABBD4)' }}
+                  className="mt-[8px] text-[12px] font-medium leading-tight"
+                >
+                  Stationery Management
+                </span>
+              </>
+            ) : (
               <img
-                src="/campo-logos/campo_logo_transparent_hq.png"
+                src="/campo-logos/favicon.svg"
                 alt="Campo"
-                className="h-7 w-auto object-contain max-w-[120px]"
+                className="w-[36px] h-[36px] rounded-lg object-contain"
               />
-              <span
-                className="text-xs font-medium tracking-wide mt-1.5"
-                style={{ color: 'var(--sidebar-muted)' }}
-              >
-                Stationery Management
-              </span>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center">
-              <img
-                src="/campo-logos/campo_logo_transparent_hq.png"
-                alt="Campo"
-                className="h-6 w-auto object-contain max-w-[60px]"
-              />
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Navigation Menu */}
-        <div className="flex-1 py-3 overflow-y-auto custom-scrollbar px-3 space-y-4">
-          {sections.map((section, idx) => {
-            const accessibleItems = section.items.filter(canAccessItem);
-            if (accessibleItems.length === 0) return null;
-
-            return (
-              <div key={section.title || idx} className="space-y-1">
-                {sidebarOpen ? (
+        <div className="flex-1 px-[14px] pt-[12px] pb-[16px] overflow-y-auto overflow-x-hidden no-scrollbar">
+          <div className="space-y-[24px]">
+            {visibleSections.map((section) => (
+              <div key={section.title} className="flex flex-col gap-[4px]">
+                {sidebarOpen && (
                   <div
-                    className="text-[11px] font-bold uppercase tracking-wider px-3 pt-2 pb-1"
-                    style={{ color: 'var(--sidebar-muted)' }}
+                    style={{ color: 'var(--sidebar-muted, #AABBD4)' }}
+                    className="px-[14px] pt-[4px] pb-[8px] text-[11px] font-bold uppercase tracking-[0.06em]"
                   >
                     {section.title}
                   </div>
-                ) : (
-                  idx > 0 && (
-                    <div
-                      className="my-2 border-t mx-2"
-                      style={{ borderColor: 'var(--border)' }}
-                    />
-                  )
                 )}
 
-                <ul className="space-y-1">
-                  {accessibleItems.map((item) => {
+                <ul className="flex flex-col gap-[4px]">
+                  {section.items.map((item) => {
                     const IconComponent = item.icon;
                     const isActive = item.exact
                       ? location.pathname === item.path
@@ -305,59 +304,55 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
                       const isParentActive = location.pathname.startsWith('/manage-stock');
                       return (
                         <li key={item.path} className="flex flex-col">
-                          <div className="flex items-center relative">
-                            <NavLink
-                              to="/manage-stock"
-                              onClick={() => {
-                                if (!sidebarOpen) {
-                                  setSidebarOpen(true);
-                                  setStockDropdownOpen(true);
-                                } else {
-                                  setStockDropdownOpen(prev => (isParentActive ? !prev : true));
-                                }
-                              }}
-                              className={`
-                                flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-150 relative group
-                                ${isParentActive ? 'font-semibold shadow-sm' : 'font-medium hover:bg-white/10'}
-                                ${!sidebarOpen ? 'justify-center px-2' : ''}
-                              `}
-                              style={{
-                                backgroundColor: isParentActive ? 'var(--primary)' : 'transparent',
-                                color: 'var(--sidebar-text)'
-                              }}
-                              title={!sidebarOpen ? item.label : ''}
-                            >
-                              <IconComponent
-                                size={19}
-                                className="flex-shrink-0"
-                                style={{ color: isParentActive ? 'var(--sidebar-text)' : 'var(--sidebar-muted)' }}
-                              />
-                              {sidebarOpen && <span className="truncate flex-1">{item.label}</span>}
-                              {sidebarOpen && stockSubItems.length > 0 && (
-                                <span
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setStockDropdownOpen(prev => !prev);
-                                  }}
-                                  className="p-1 hover:bg-white/20 rounded transition-colors ml-1"
-                                  title={stockDropdownOpen ? 'Collapse menu' : 'Expand menu'}
-                                >
-                                  <ChevronDown
-                                    size={15}
-                                    className={`transition-transform duration-200 ${stockDropdownOpen ? 'rotate-180' : ''}`}
-                                  />
-                                </span>
-                              )}
-                            </NavLink>
-                          </div>
+                          <NavLink
+                            to="/manage-stock"
+                            onClick={() => {
+                              if (!sidebarOpen) {
+                                setSidebarOpen(true);
+                                setStockDropdownOpen(true);
+                              } else {
+                                setStockDropdownOpen(prev => (isParentActive ? !prev : true));
+                              }
+                            }}
+                            style={{ color: 'var(--sidebar-text, #FFFFFF)' }}
+                            className={`
+                              w-full flex items-center rounded-[12px] text-[13px] transition-all duration-200 relative group
+                              ${sidebarOpen ? 'gap-[14px] px-[14px] py-[10px]' : 'justify-center px-0 py-[10px]'}
+                              ${isParentActive
+                                ? 'bg-primary font-semibold shadow-md'
+                                : 'font-medium opacity-85 hover:opacity-100 hover:bg-white/10'
+                              }
+                            `}
+                            title={!sidebarOpen ? item.label : ''}
+                          >
+                            <IconComponent
+                              size={sidebarOpen ? 18 : 20}
+                              strokeWidth={2}
+                              className="flex-shrink-0"
+                            />
+                            {sidebarOpen && <span className="truncate flex-1">{item.label}</span>}
+                            {sidebarOpen && stockSubItems.length > 0 && (
+                              <span
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setStockDropdownOpen(prev => !prev);
+                                }}
+                                className="p-0.5 hover:bg-white/20 rounded transition-colors ml-1"
+                                title={stockDropdownOpen ? 'Collapse menu' : 'Expand menu'}
+                              >
+                                <ChevronDown
+                                  size={14}
+                                  strokeWidth={2}
+                                  className={`transition-transform duration-200 ${stockDropdownOpen ? 'rotate-180' : ''}`}
+                                />
+                              </span>
+                            )}
+                          </NavLink>
 
                           {/* Submenu Dropdown under Academic Stock */}
                           {sidebarOpen && stockDropdownOpen && stockSubItems.length > 0 && (
-                            <ul
-                              className="mt-1 ml-5 pl-3 border-l space-y-1 py-1"
-                              style={{ borderColor: 'var(--border)' }}
-                            >
+                            <ul className="mt-1 ml-4 pl-3 border-l border-white/20 flex flex-col gap-[4px] py-0.5">
                               {stockSubItems.map((subItem) => {
                                 const isSubActive = isParentActive && currentTab === subItem.tabId;
                                 const SubIcon = subItem.icon;
@@ -369,20 +364,16 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
                                       onClick={() => {
                                         if (isMobileProp) setSidebarOpen(false);
                                       }}
+                                      style={{ color: 'var(--sidebar-text, #FFFFFF)' }}
                                       className={`
-                                        flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg transition-all duration-150
-                                        ${isSubActive ? 'font-semibold shadow-sm' : 'font-medium hover:bg-white/10'}
+                                        w-full flex items-center gap-[10px] px-[12px] py-[8px] text-[12px] rounded-[10px] transition-all duration-150
+                                        ${isSubActive
+                                          ? 'bg-primary font-semibold shadow-sm'
+                                          : 'font-medium opacity-80 hover:opacity-100 hover:bg-white/10'
+                                        }
                                       `}
-                                      style={{
-                                        backgroundColor: isSubActive ? 'var(--primary)' : 'transparent',
-                                        color: 'var(--sidebar-text)'
-                                      }}
                                     >
-                                      <SubIcon
-                                        size={14}
-                                        className="flex-shrink-0"
-                                        style={{ color: isSubActive ? 'var(--sidebar-text)' : 'var(--sidebar-muted)' }}
-                                      />
+                                      <SubIcon size={14} strokeWidth={2} className="flex-shrink-0" />
                                       <span className="truncate">{subItem.label}</span>
                                     </NavLink>
                                   </li>
@@ -399,101 +390,86 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
                         <NavLink
                           to={item.path}
                           end={item.exact}
-                          className={`
-                            flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all duration-150 relative group
-                            ${isActive ? 'font-semibold shadow-sm' : 'font-medium hover:bg-white/10'}
-                            ${!sidebarOpen ? 'justify-center px-2' : ''}
-                          `}
-                          style={{
-                            backgroundColor: isActive ? 'var(--primary)' : 'transparent',
-                            color: 'var(--sidebar-text)'
+                          onClick={() => {
+                            if (isMobileProp) setSidebarOpen(false);
                           }}
+                          style={{ color: 'var(--sidebar-text, #FFFFFF)' }}
+                          className={`
+                            w-full flex items-center rounded-[12px] text-[13px] transition-all duration-200 relative group
+                            ${sidebarOpen ? 'gap-[14px] px-[14px] py-[10px]' : 'justify-center px-0 py-[10px]'}
+                            ${isActive
+                              ? 'bg-primary font-semibold shadow-md'
+                              : 'font-medium opacity-85 hover:opacity-100 hover:bg-white/10'
+                            }
+                          `}
                           title={!sidebarOpen ? item.label : ''}
                         >
                           <IconComponent
-                            size={19}
+                            size={sidebarOpen ? 18 : 20}
+                            strokeWidth={2}
                             className="flex-shrink-0"
-                            style={{ color: isActive ? 'var(--sidebar-text)' : 'var(--sidebar-muted)' }}
                           />
-                          {sidebarOpen && <span className="truncate flex-1">{item.label}</span>}
+                          {sidebarOpen && <span className="truncate">{item.label}</span>}
                         </NavLink>
                       </li>
                     );
                   })}
                 </ul>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
 
-        {/* Footer Section - User Info & Logout (Matches 2nd reference image) */}
-        <div className={`mt-auto ${sidebarOpen ? 'p-3 pb-4' : 'p-2 pb-3'}`}>
-          {currentUser && (
-            <div
-              className={`flex items-center rounded-2xl transition-all ${
-                sidebarOpen ? 'px-3.5 py-3 gap-3' : 'p-2 justify-center'
-              }`}
-              style={{
-                backgroundColor: 'rgba(255, 255, 255, 0.08)'
-              }}
-            >
-              {sidebarOpen ? (
-                <>
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0"
-                    style={{
-                      backgroundColor: '#EEF2F6',
-                      color: 'var(--primary)'
-                    }}
-                  >
+        {/* Footer Section - Bottom User Profile */}
+        {currentUser && (
+          <div className="p-[14px] border-t border-white/10">
+            {sidebarOpen ? (
+              <div className="h-[64px] rounded-[16px] px-[14px] flex items-center justify-between gap-[12px] bg-black/20 border border-white/10 shadow-sm">
+                <div className="flex items-center gap-[12px] flex-1 min-w-0">
+                  <div className="w-[40px] h-[40px] rounded-full bg-primary text-white flex items-center justify-center text-[14px] font-bold flex-shrink-0 shadow-sm">
                     {userInitial}
                   </div>
-                  <div className="flex items-center justify-between gap-2 flex-1 min-w-0">
-                    <div className="flex flex-col leading-tight min-w-0 flex-1">
-                      <span
-                        className="font-bold text-sm truncate tracking-tight"
-                        style={{ color: 'var(--sidebar-text)' }}
-                        title={displayName}
-                      >
-                        {displayName}
-                      </span>
-                      <span
-                        className="text-xs truncate mt-0.5 font-normal"
-                        style={{ color: 'var(--sidebar-muted)' }}
-                      >
-                        {roleTitle}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={onLogout}
-                      className="p-1 rounded-lg hover:bg-white/10 hover:text-red-400 transition-colors flex-shrink-0 cursor-pointer"
-                      style={{ color: 'var(--sidebar-text)' }}
-                      title="Logout"
-                      aria-label="Logout"
+                  <div className="flex flex-col leading-tight flex-1 min-w-0">
+                    <span
+                      className="text-[13px] font-bold truncate"
+                      style={{ color: 'var(--sidebar-text, #FFFFFF)' }}
+                      title={displayName}
                     >
-                      <LogOut size={18} strokeWidth={2} />
-                    </button>
+                      {displayName}
+                    </span>
+                    <span
+                      className="text-[11px] font-normal truncate mt-0.5"
+                      style={{ color: 'var(--sidebar-muted, #AABBD4)' }}
+                      title={displayRole}
+                    >
+                      {displayRole}
+                    </span>
                   </div>
-                </>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onLogout}
-                  className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm hover:scale-105 transition-transform cursor-pointer"
-                  style={{
-                    backgroundColor: '#EEF2F6',
-                    color: 'var(--primary)'
-                  }}
-                  title={`Logout (${displayName})`}
-                  aria-label={`Logout (${displayName})`}
+                </div>
+                {onLogout && (
+                  <button
+                    type="button"
+                    onClick={onLogout}
+                    className="p-2 rounded-lg text-white/80 hover:text-white hover:bg-danger transition-all duration-200 flex-shrink-0 cursor-pointer"
+                    title="Logout"
+                    aria-label="Logout"
+                  >
+                    <LogOut size={16} strokeWidth={2} />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center">
+                <div
+                  className="w-[40px] h-[40px] rounded-full bg-primary text-white flex items-center justify-center text-[14px] font-bold shadow-sm cursor-default"
+                  title={`${displayName} (${displayRole})`}
                 >
                   {userInitial}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </aside>
     </>
   );
