@@ -67,6 +67,7 @@ const GeneralStock = lazy(() => import('./pages/GeneralStock.jsx'));
 const EmployeeDashboard = lazy(() => import('./pages/EmployeeDashboard.jsx'));
 const EmployeeDetail = lazy(() => import('./pages/EmployeeDetail.jsx'));
 const ProfitReport = lazy(() => import('./pages/ProfitReport.jsx'));
+const ChangeTransactionDate = lazy(() => import('./pages/ChangeTransactionDate.jsx'));
 import ProtectedRoute from './components/ProtectedRoute';
 import { apiUrl } from './utils/api';
 import useOnlineStatus from './hooks/useOnlineStatus';
@@ -87,6 +88,7 @@ const resolveDefaultPath = (user) => {
     { key: 'employee-dashboard', path: '/employees-dashboard' },
     { key: 'courses', path: '/courses' },
     { key: 'manage-stock', path: '/manage-stock' },
+    { key: 'change-transaction-date', path: '/change-transaction-date' },
     { key: 'reports-daily', path: '/transactions' },
     { key: 'reports-monthly', path: '/transactions' },
     { key: 'reports-stock', path: '/transactions' },
@@ -780,6 +782,14 @@ function App() {
                     element={
                       <ProtectedRoute currentUser={currentUser} requiredPermission="general-purchase">
                         <GeneralStock currentUser={currentUser} />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/change-transaction-date"
+                    element={
+                      <ProtectedRoute currentUser={currentUser} requiredPermission="change-transaction-date">
+                        <ChangeTransactionDate currentUser={currentUser} />
                       </ProtectedRoute>
                     }
                   />

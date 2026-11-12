@@ -667,21 +667,32 @@ const createTransaction = asyncHandler(async (req, res) => {
  * @access  Public
  */
 const getAllTransactions = asyncHandler(async (req, res) => {
-  const { course, studentId, transactionType, paymentMethod, isPaid, startDate, endDate, collegeId, limit } = req.query;
+  const { course, branch, year, studentId, studentIds, search, transactionType, paymentMethod, isPaid, startDate, endDate, collegeId, limit } = req.query;
   
   const filter = {};
+  const andConditions = [];
 
   if (collegeId) {
-    filter.$or = [
-      { collegeId: collegeId },
-      { branchId: collegeId } // Keep support for legacy branchId field
-    ];
+    andConditions.push({
+      $or: [
+        { collegeId: collegeId },
+        { branchId: collegeId } // Keep support for legacy branchId field
+      ]
+    });
   }
   
   if (transactionType) {
     // Legacy support: if 'branch_transfer', assume 'college_transfer' or handle legacy data
     if (transactionType === 'branch_transfer') {
       filter.transactionType = { $in: ['branch_transfer', 'college_transfer'] };
+    } else if (transactionType === 'student') {
+      andConditions.push({
+        $or: [
+          { transactionType: 'student' },
+          { transactionType: null, 'student.name': { $exists: true } },
+          { transactionType: { $exists: false }, 'student.name': { $exists: true } }
+        ]
+      });
     } else {
       filter.transactionType = transactionType;
     }
@@ -689,24 +700,76 @@ const getAllTransactions = asyncHandler(async (req, res) => {
   
   if (transactionType === 'employee') {
     if (studentId) {
-      filter.$or = [
-        { 'employee.id': studentId },
-        { 'employee.empNo': studentId }
-      ];
+      andConditions.push({
+        $or: [
+          { 'employee.id': studentId },
+          { 'employee.empNo': studentId }
+        ]
+      });
     }
   } else if (!transactionType || transactionType === 'student') {
     if (course) {
-      filter['student.course'] = course;
+      const escapedCourse = String(course).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter['student.course'] = new RegExp(`^${escapedCourse}$`, 'i');
+    }
+
+    if (branch) {
+      const escapedBranch = String(branch).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      filter['student.branch'] = new RegExp(`^${escapedBranch}$`, 'i');
+    }
+
+    if (year !== undefined && year !== '') {
+      const parsedYear = Number(year);
+      if (!Number.isNaN(parsedYear)) {
+        filter['student.year'] = parsedYear;
+      }
     }
     
     if (studentId) {
       // Logic update: 'studentId' param can be either sqlId, legacy userId, or the string studentId (Admission No)
-      filter.$or = [
-        { 'student.sqlId': studentId },
-        { 'student.studentId': studentId },
-        { 'student.userId': studentId } // Keep legacy support just in case
-      ];
+      andConditions.push({
+        $or: [
+          { 'student.sqlId': studentId },
+          { 'student.studentId': studentId },
+          { 'student.pin': studentId },
+          { 'student.userId': studentId } // Keep legacy support just in case
+        ]
+      });
     }
+
+    if (studentIds) {
+      const idList = String(studentIds)
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean);
+      if (idList.length > 0) {
+        andConditions.push({
+          $or: [
+            { 'student.sqlId': { $in: idList } },
+            { 'student.studentId': { $in: idList } },
+            { 'student.pin': { $in: idList } },
+          ]
+        });
+      }
+    }
+
+    if (search && String(search).trim()) {
+      const escaped = String(search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(escaped, 'i');
+      andConditions.push({
+        $or: [
+          { 'student.name': searchRegex },
+          { 'student.studentId': searchRegex },
+          { 'student.pin': searchRegex },
+          { 'student.sqlId': searchRegex },
+          { transactionId: searchRegex },
+        ]
+      });
+    }
+  }
+
+  if (andConditions.length > 0) {
+    filter.$and = andConditions;
   }
   
   if (paymentMethod) {
@@ -740,8 +803,11 @@ const getAllTransactions = asyncHandler(async (req, res) => {
     query = query.skip(skip).limit(batchLimit);
   }
 
-  // Run query and total count in parallel
-  const shouldCount = isChunkedFormat || req.query.includeCount === 'true' || skip === 0;
+  // Run query and total count in parallel (allow skipCount=true when caller doesn't need total)
+  const shouldCount =
+    req.query.skipCount === 'true'
+      ? false
+      : (isChunkedFormat || req.query.includeCount === 'true' || skip === 0);
   const [transactions, totalCount] = await Promise.all([
     query.lean(),
     shouldCount ? Transaction.countDocuments(filter) : Promise.resolve(null),
@@ -1404,11 +1470,164 @@ const getTransactionsByStudent = asyncHandler(async (req, res) => {
   res.status(200).json(transactions);
 });
 
+/**
+ * @desc    Bulk update transaction dates for student transactions (preserves each transaction's time-of-day)
+ * @route   PUT /api/transactions/bulk-update-date
+ * @access  Public
+ */
+const bulkUpdateTransactionDates = asyncHandler(async (req, res) => {
+  const { transactionIds, targetDate, timezoneOffsetMinutes, updatedBy } = req.body;
+
+  if (!Array.isArray(transactionIds) || transactionIds.length === 0) {
+    res.status(400);
+    throw new Error('Please select at least one transaction to update.');
+  }
+
+  const validObjectIds = Array.from(new Set(transactionIds))
+    .filter((id) => typeof id === 'string' && mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+
+  if (validObjectIds.length === 0) {
+    res.status(400);
+    throw new Error('No valid transaction IDs were provided.');
+  }
+
+  if (typeof targetDate !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(targetDate.trim())) {
+    res.status(400);
+    throw new Error('Invalid target date format. Expected YYYY-MM-DD.');
+  }
+
+  const targetDateStr = targetDate.trim();
+  const [targetYear, targetMonth, targetDay] = targetDateStr.split('-').map(Number);
+
+  // Verify calendar date validity (e.g., disallow Feb 30)
+  const checkDate = new Date(Date.UTC(targetYear, targetMonth - 1, targetDay));
+  if (
+    checkDate.getUTCFullYear() !== targetYear ||
+    checkDate.getUTCMonth() !== targetMonth - 1 ||
+    checkDate.getUTCDate() !== targetDay
+  ) {
+    res.status(400);
+    throw new Error('Invalid calendar date.');
+  }
+
+  // Timezone offset in minutes matching JS Date.prototype.getTimezoneOffset() (e.g. -330 for IST)
+  const tzOffset =
+    typeof timezoneOffsetMinutes === 'number' &&
+    Number.isFinite(timezoneOffsetMinutes) &&
+    timezoneOffsetMinutes >= -840 &&
+    timezoneOffsetMinutes <= 840
+      ? timezoneOffsetMinutes
+      : 0;
+
+  // Strictly prevent future dates beyond today (in user's local timezone)
+  const nowMs = Date.now();
+  const userNowLocal = new Date(nowMs - tzOffset * 60000);
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const todayLocalStr = `${userNowLocal.getUTCFullYear()}-${pad2(userNowLocal.getUTCMonth() + 1)}-${pad2(userNowLocal.getUTCDate())}`;
+
+  if (targetDateStr > todayLocalStr) {
+    res.status(400);
+    throw new Error('Future dates are not allowed. You can only select today or past dates.');
+  }
+
+  const transactions = await Transaction.find({
+    _id: { $in: validObjectIds },
+    $or: [
+      { transactionType: 'student' },
+      { transactionType: null, 'student.name': { $exists: true } },
+      { transactionType: { $exists: false }, 'student.name': { $exists: true } },
+    ],
+  }).select('_id transactionId transactionDate createdAt student');
+
+  if (!transactions || transactions.length === 0) {
+    res.status(404);
+    throw new Error('No matching student transactions found.');
+  }
+
+  const now = new Date();
+  const bulkOps = [];
+  const updatedTransactions = [];
+
+  for (const tx of transactions) {
+    const origDate = new Date(tx.transactionDate || tx.createdAt || now);
+    // Convert UTC timestamp into user's fake-UTC local clock to swap only the calendar date cleanly
+    const localTime = new Date(origDate.getTime() - tzOffset * 60000);
+    localTime.setUTCFullYear(targetYear, targetMonth - 1, targetDay);
+    let newUtcDate = new Date(localTime.getTime() + tzOffset * 60000);
+
+    // Ensure resulting timestamp never exceeds current wall-clock time
+    if (newUtcDate.getTime() > Date.now()) {
+      newUtcDate = new Date(Date.now());
+    }
+
+    bulkOps.push({
+      updateOne: {
+        filter: { _id: tx._id },
+        update: {
+          $set: {
+            transactionDate: newUtcDate,
+            createdAt: newUtcDate,
+            updatedAt: now,
+          },
+        },
+      },
+    });
+
+    updatedTransactions.push({
+      _id: tx._id,
+      transactionId: tx.transactionId,
+      previousDate: origDate,
+      newDate: newUtcDate,
+    });
+  }
+
+  const bulkResult = await Transaction.collection.bulkWrite(bulkOps, { ordered: false });
+
+  // Record audit log entry
+  try {
+    const { UserAudit } = require('../models/auditLogModel');
+    const staffName = updatedBy?.name || (req.user && req.user.name) || 'Administrator';
+    const staffEmpNo = updatedBy?.empNo || (req.user && req.user.empNo) || '';
+    const staffRole = updatedBy?.role || (req.user && req.user.role) || 'Administrator';
+
+    await UserAudit.create({
+      userId: updatedBy?._id || null,
+      userName: staffName,
+      empNo: staffEmpNo,
+      userRole: staffRole,
+      event: 'transaction_date_update',
+      action: 'Bulk Update Transaction Date',
+      description: `Bulk updated ${transactions.length} student transaction date(s) to ${targetDateStr}`,
+      loginTime: new Date(),
+      ip: req.ip || req.headers['x-forwarded-for'] || '',
+      userAgent: req.headers['user-agent'] || '',
+      status: 'success',
+      details: {
+        targetDate: targetDateStr,
+        updatedCount: transactions.length,
+        transactionIds: updatedTransactions.slice(0, 50).map((item) => item.transactionId),
+      },
+    });
+  } catch (auditErr) {
+    console.warn('Audit log creation failed for bulk transaction date update:', auditErr.message);
+  }
+
+  res.status(200).json({
+    message: `Successfully updated ${transactions.length} student transaction date(s) to ${targetDateStr}.`,
+    matchedCount: bulkResult.matchedCount ?? transactions.length,
+    modifiedCount: bulkResult.modifiedCount ?? transactions.length,
+    targetDate: targetDateStr,
+    updatedTransactions,
+  });
+});
+
 module.exports = {
   createTransaction,
   getAllTransactions,
   getTransactionById,
   updateTransaction,
+  bulkUpdateTransactionDates,
   deleteTransaction,
   getTransactionsByStudent,
   getStudentDuesReport,

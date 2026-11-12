@@ -5,6 +5,7 @@ const {
   getAllTransactions,
   getTransactionById,
   updateTransaction,
+  bulkUpdateTransactionDates,
   deleteTransaction,
   getTransactionsByStudent,
   getStudentDuesReport,
@@ -13,6 +14,9 @@ const {
 // @route   POST /api/transactions
 // @route   GET /api/transactions
 router.route('/').post(createTransaction).get(getAllTransactions);
+
+// @route   PUT /api/transactions/bulk-update-date
+router.put('/bulk-update-date', bulkUpdateTransactionDates);
 
 // @route   GET /api/transactions/student/:studentId
 router.get('/student/:studentId', getTransactionsByStudent);

@@ -4,7 +4,7 @@ import {
   LayoutGrid, GraduationCap, Briefcase, Building2, Package,
   ArrowRightLeft, ShoppingCart, Receipt, TrendingUp, ClipboardList,
   UserPlus, ClipboardCheck, ShieldCheck, Settings, ChevronLeft,
-  ChevronRight, ChevronDown, LogOut, X, Plus, List
+  ChevronRight, ChevronDown, LogOut, X, Plus, List, CalendarClock
 } from 'lucide-react';
 import { hasViewAccess } from './utils/permissions';
 import { apiUrl } from './utils/api';
@@ -150,6 +150,7 @@ const Sidebar = ({ onLogout, isMobile: isMobileProp, sidebarOpen, setSidebarOpen
         { path: '/manage-stock', label: 'Academic Stock', icon: Package, permissionKeys: ['stock-products', 'stock-add', 'stock-entries', 'stock-vendors', 'manage-stock'] },
         { path: '/stock-transfers', label: 'Stock Transfers', icon: ArrowRightLeft, permissionKey: 'stock-transfers' },
         { path: '/general-purchase', label: 'General Stock', icon: ShoppingCart, permissionKey: 'general-purchase' },
+        { path: '/change-transaction-date', label: 'Change Transaction Date', icon: CalendarClock, permissionKey: 'change-transaction-date' },
       ]
     },
     {
