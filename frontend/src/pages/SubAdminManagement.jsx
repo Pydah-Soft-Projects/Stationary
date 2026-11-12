@@ -38,6 +38,7 @@ const SIDEBAR_ITEMS = [
     ],
   },
   { path: '/stock-transfers', label: 'Stock Transfers', key: 'stock-transfers' },
+  { path: '/change-transaction-date', label: 'Change Transaction Date', key: 'change-transaction-date' },
   {
     path: '/transactions',
     label: 'Reports',

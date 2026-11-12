@@ -20,6 +20,7 @@ const DEFAULT_SYSTEM_ROLES = [
       'stock-entries:full',
       'stock-vendors:full',
       'stock-transfers:full',
+      'change-transaction-date:full',
       'reports-daily:full',
       'reports-monthly:full',
       'reports-stock:full',
