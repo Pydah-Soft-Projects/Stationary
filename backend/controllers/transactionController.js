@@ -710,7 +710,8 @@ const getAllTransactions = asyncHandler(async (req, res) => {
   } else if (!transactionType || transactionType === 'student') {
     if (course) {
       const escapedCourse = String(course).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      filter['student.course'] = new RegExp(`^${escapedCourse}$`, 'i');
+      // Matches exact course name or base course with branch suffix (e.g. "DIPLOMA" matches both "DIPLOMA" and "DIPLOMA IN AGRICULTURE")
+      filter['student.course'] = new RegExp(`^${escapedCourse}(\\s+IN\\s+.*)?$`, 'i');
     }
 
     if (branch) {
