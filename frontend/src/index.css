@@ -252,24 +252,36 @@
     text-shadow: none !important;
   }
 
-  /* Page setup for thermal printers - 80mm width is most common */
+  /* Default page setup: standard page sizing */
   @page {
-    size: 80mm auto; /* 80mm width, auto height */
-    margin: 2mm 3mm; /* Small margins for thermal paper */
+    size: auto;
+    margin: 10mm;
   }
 
   /* Hide non-printable elements */
   .no-print,
-  button,
+  button:not(.allow-print),
   .modal-backdrop {
     display: none !important;
   }
 
-  /* Base print styles - BOLD for thermal printers */
+  /* General document base print styling */
   html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Thermal printer styles - only applied when printing thermal receipts */
+  body:has(.thermal-receipt),
+  body:has([data-thermal-print="true"]),
+  .thermal-receipt-page {
     width: 80mm !important;
     max-width: 80mm !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     padding: 0 !important;
     font-family: 'Arial Black', 'Helvetica Bold', 'Arial', sans-serif !important;
     font-size: 11px !important;
@@ -277,8 +289,6 @@
     line-height: 1.4 !important;
     background: white !important;
     color: black !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
     -webkit-font-smoothing: none !important;
   }
 
@@ -433,22 +443,27 @@
     margin: 2mm 0 !important;
   }
 
-  /* Hide colored backgrounds in print */
-  .bg-blue-50, .bg-blue-100, .bg-blue-600, .bg-blue-700,
-  .bg-indigo-50, .bg-indigo-100, .bg-green-50, .bg-gray-50,
-  .bg-gradient-to-r, .bg-gradient-to-br {
+  /* Hide colored backgrounds in thermal print */
+  .thermal-receipt .bg-blue-50, .thermal-receipt .bg-blue-100, .thermal-receipt .bg-blue-600, .thermal-receipt .bg-blue-700,
+  .thermal-receipt .bg-indigo-50, .thermal-receipt .bg-indigo-100, .thermal-receipt .bg-green-50, .thermal-receipt .bg-gray-50,
+  .thermal-receipt .bg-gradient-to-r, .thermal-receipt .bg-gradient-to-br,
+  [data-thermal-print="true"] .bg-blue-50, [data-thermal-print="true"] .bg-blue-100, [data-thermal-print="true"] .bg-blue-600,
+  [data-thermal-print="true"] .bg-indigo-50, [data-thermal-print="true"] .bg-green-50, [data-thermal-print="true"] .bg-gray-50 {
     background: white !important;
   }
 
-  /* Ensure text is black */
-  .text-blue-600, .text-blue-700, .text-blue-900,
-  .text-indigo-600, .text-indigo-700,
-  .text-gray-500, .text-gray-600, .text-gray-700, .text-gray-900 {
+  /* Ensure text is black in thermal print */
+  .thermal-receipt .text-blue-600, .thermal-receipt .text-blue-700, .thermal-receipt .text-blue-900,
+  .thermal-receipt .text-indigo-600, .thermal-receipt .text-indigo-700,
+  .thermal-receipt .text-gray-500, .thermal-receipt .text-gray-600, .thermal-receipt .text-gray-700, .thermal-receipt .text-gray-900,
+  [data-thermal-print="true"] .text-blue-600, [data-thermal-print="true"] .text-indigo-600,
+  [data-thermal-print="true"] .text-gray-500, [data-thermal-print="true"] .text-gray-600, [data-thermal-print="true"] .text-gray-700 {
     color: black !important;
   }
 
   /* Remove rounded corners and shadows for cleaner thermal print */
-  .rounded-xl, .rounded-lg, .rounded-md, .rounded-2xl {
+  .thermal-receipt .rounded-xl, .thermal-receipt .rounded-lg, .thermal-receipt .rounded-md, .thermal-receipt .rounded-2xl,
+  [data-thermal-print="true"] .rounded-xl, [data-thermal-print="true"] .rounded-lg, [data-thermal-print="true"] .rounded-md, [data-thermal-print="true"] .rounded-2xl {
     border-radius: 0 !important;
   }
 

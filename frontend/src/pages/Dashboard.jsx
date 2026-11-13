@@ -1,18 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Users, GraduationCap, Package, ShoppingCart, DollarSign,
-  TrendingUp, AlertCircle, Activity, Calendar, ArrowRight,
-  CreditCard, Wallet, TrendingDown, FileText, BarChart3, Lock, X, Building2, PackageSearch, Search
+  GraduationCap, Package, ShoppingCart, DollarSign,
+  AlertCircle, Activity, Calendar, ArrowRight,
+  CreditCard, Wallet, FileText, BarChart3, X, Building2, PackageSearch, Search
 } from 'lucide-react';
 import { apiUrl } from '../utils/api';
+import AbstractChartCard from '../components/AbstractChartCard';
 
 const Dashboard = () => {
   // Get current user from localStorage
   const currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
   const isSuperAdmin = currentUser?.role === 'Administrator';
-  const permissions = currentUser?.permissions || [];
-  const hasStudentDashboardPermission = isSuperAdmin || permissions.includes('student-dashboard') || permissions.includes('course-dashboard');
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalStudents: 0,
@@ -30,6 +29,8 @@ const Dashboard = () => {
     todayCashRevenue: 0,
     todayOnlineRevenue: 0,
     zeroStockDuesStudents: 0,
+    abstractChartData: null,
+    latestTransactionDate: null,
   });
   const [zeroStockDuesData, setZeroStockDuesData] = useState([]);
   const [recentTransactions, setRecentTransactions] = useState([]);
@@ -238,45 +239,6 @@ const Dashboard = () => {
           )}
         </div>
 
-        {/* Key Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          {/* Total Revenue */}
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 sm:p-5 text-white shadow-md hover:shadow-lg transition-shadow">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center">
-                <DollarSign size={18} />
-              </div>
-              <TrendingUp size={16} className="opacity-80" />
-            </div>
-            <div className="text-2xl font-bold mb-0.5">
-              {loading ? (
-                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              ) : (
-                formatCurrency(stats.totalRevenue)
-              )}
-            </div>
-            <div className="text-green-100 text-xs font-medium">Total Revenue (Paid)</div>
-          </div>
-
-          {/* Pending Revenue */}
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-4 sm:p-5 text-white shadow-md hover:shadow-lg transition-shadow">
-            <div className="flex items-center justify-between mb-2">
-              <div className="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center">
-                <CreditCard size={18} />
-              </div>
-              <TrendingDown size={16} className="opacity-80" />
-            </div>
-            <div className="text-2xl font-bold mb-0.5">
-              {loading ? (
-                <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-              ) : (
-                formatCurrency(stats.pendingRevenue)
-              )}
-            </div>
-            <div className="text-orange-100 text-xs font-medium">Pending Payments</div>
-          </div>
-        </div>
-
         {/* Secondary Statistics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-4">
           {/* Total Products */}
@@ -356,7 +318,7 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Today's Performance & Course Overview */}
+        {/* Daily Abstract & Recent Transactions */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
           {/* Daily Transaction Abstract */}
           <div className="bg-gradient-to-br from-teal-500 to-cyan-600 rounded-xl p-4 sm:p-5 shadow-md hover:shadow-lg transition-shadow">
@@ -466,66 +428,29 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Student Overview */}
-          <div className={`bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-4 sm:p-5 shadow-md transition-shadow relative ${!hasStudentDashboardPermission ? 'opacity-60' : 'hover:shadow-lg'}`}>
-            {!hasStudentDashboardPermission && (
-              <div className="absolute inset-0 bg-gray-900/30 rounded-xl flex items-center justify-center z-10 backdrop-blur-[2px]">
-                <div className="flex flex-col items-center gap-1.5">
-                  <div className="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">
-                    <Lock size={18} className="text-white" />
-                  </div>
-                  <p className="text-white font-semibold text-xs">Locked</p>
-                  <p className="text-indigo-100 text-[11px]">No access permission</p>
-                </div>
-              </div>
-            )}
-            <div className="flex items-center justify-between mb-3.5">
-              <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                  <GraduationCap size={16} className="text-white" />
-                </div>
-                Student Overview
-                {!hasStudentDashboardPermission && (
-                  <Lock size={14} className="text-white/80" />
-                )}
-              </h3>
-              {hasStudentDashboardPermission && (
-                <button
-                  onClick={() => navigate('/students-dashboard')}
-                  className="text-xs text-white hover:text-indigo-100 font-medium flex items-center gap-1 bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded-lg transition-colors"
-                >
-                  View Student Dashboard
-                  <ArrowRight size={12} />
-                </button>
-              )}
-            </div>
-            <div className="grid grid-cols-1 gap-2">
-              <div className="flex items-center justify-between p-2.5 px-3.5 bg-white/20 rounded-lg backdrop-blur-sm">
-                <div>
-                  <p className="text-xs text-indigo-100">Total Students</p>
-                  <p className="text-lg font-bold text-white">{stats.totalStudents.toLocaleString()}</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-2.5 px-3.5 bg-white/20 rounded-lg backdrop-blur-sm">
-                <div>
-                  <p className="text-xs text-indigo-100">Paid Students</p>
-                  <p className="text-lg font-bold text-white">{stats.paidStudents.toLocaleString()}</p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between p-2.5 px-3.5 bg-white/20 rounded-lg backdrop-blur-sm">
-                <div>
-                  <p className="text-xs text-indigo-100">Pending Students</p>
-                  <p className="text-lg font-bold text-white">{stats.unpaidStudents.toLocaleString()}</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          {/* Abstract Graphical Analytics Chart Card */}
+          <AbstractChartCard
+            abstractChartData={stats.abstractChartData}
+            loading={abstractLoading}
+            startDate={stats.abstractChartData?.startDate || abstractStartDate}
+            endDate={stats.abstractChartData?.endDate || abstractEndDate}
+            totalRevenue={stats.abstractChartData?.paymentBreakdown?.totalRevenue ?? stats.todayRevenue}
+            cashRevenue={stats.abstractChartData?.paymentBreakdown?.cashAmount ?? stats.todayCashRevenue}
+            onlineRevenue={stats.abstractChartData?.paymentBreakdown?.onlineAmount ?? stats.todayOnlineRevenue}
+            transactionsCount={stats.abstractChartData?.paymentBreakdown?.totalTransactions ?? stats.todayTransactions}
+            latestTransactionDate={stats.latestTransactionDate}
+            onSelectDate={(newDate) => {
+              setAbstractStartDate(newDate);
+              setAbstractEndDate(newDate);
+            }}
+            formatCurrency={formatCurrency}
+          />
         </div>
 
-        {/* Recent Transactions & Quick Actions */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Recent Transactions */}
-          <div className="bg-gradient-to-br from-purple-500 to-violet-600 rounded-xl shadow-md hover:shadow-lg transition-shadow">
+        {/* Recent Transactions */}
+        <div className="mb-4">
+          {/* Recent Transactions List */}
+          <div className="bg-gradient-to-br from-[#465efb] to-[#355cf7] rounded-xl shadow-md hover:shadow-lg transition-shadow">
             <div className="p-3.5 px-4 border-b border-white/20 flex items-center justify-between">
               <h3 className="text-base font-semibold text-white flex items-center gap-2">
                 <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
@@ -535,7 +460,7 @@ const Dashboard = () => {
               </h3>
               <button
                 onClick={() => navigate('/transactions')}
-                className="text-xs text-white hover:text-purple-100 font-medium flex items-center gap-1 bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded-lg transition-colors"
+                className="text-xs text-white hover:text-indigo-100 font-medium flex items-center gap-1 bg-white/20 hover:bg-white/30 px-2.5 py-1 rounded-lg transition-colors"
               >
                 View All
                 <ArrowRight size={12} />
@@ -556,7 +481,7 @@ const Dashboard = () => {
                     >
                       <div className="flex-1 min-w-0 pr-3">
                         <p className="text-sm font-semibold text-white truncate">{transaction.student?.name || 'N/A'}</p>
-                        <p className="text-xs text-purple-100">
+                        <p className="text-xs text-indigo-100">
                           {transaction.student?.course?.toUpperCase()} • {formatDate(transaction.transactionDate)}
                         </p>
                       </div>
@@ -575,61 +500,9 @@ const Dashboard = () => {
               ) : (
                 <div className="text-center py-6">
                   <FileText className="w-8 h-8 text-white/50 mx-auto mb-1.5" />
-                  <p className="text-xs text-purple-100">No recent transactions</p>
+                  <p className="text-xs text-indigo-100">No recent transactions</p>
                 </div>
               )}
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="bg-gradient-to-br from-pink-500 to-rose-600 rounded-xl shadow-md hover:shadow-lg transition-shadow">
-            <div className="p-3.5 px-4 border-b border-white/20">
-              <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
-                  <Activity size={16} className="text-white" />
-                </div>
-                Quick Actions
-              </h3>
-            </div>
-            <div className="p-4">
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  onClick={() => navigate('/add-student')}
-                  className="flex flex-col items-center justify-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition-colors group backdrop-blur-sm"
-                >
-                  <div className="w-8 h-8 bg-white/30 rounded-lg flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
-                    <Users size={16} className="text-white" />
-                  </div>
-                  <span className="text-xs font-medium text-white">Add Student</span>
-                </button>
-                <button
-                  onClick={() => navigate('/manage-stock')}
-                  className="flex flex-col items-center justify-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition-colors group backdrop-blur-sm"
-                >
-                  <div className="w-8 h-8 bg-white/30 rounded-lg flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
-                    <Package size={16} className="text-white" />
-                  </div>
-                  <span className="text-xs font-medium text-white">Manage Stock</span>
-                </button>
-                <button
-                  onClick={() => navigate('/transactions')}
-                  className="flex flex-col items-center justify-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition-colors group backdrop-blur-sm"
-                >
-                  <div className="w-8 h-8 bg-white/30 rounded-lg flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
-                    <ShoppingCart size={16} className="text-white" />
-                  </div>
-                  <span className="text-xs font-medium text-white">Transactions</span>
-                </button>
-                <button
-                  onClick={() => navigate('/student-management')}
-                  className="flex flex-col items-center justify-center p-3 bg-white/20 rounded-lg hover:bg-white/30 transition-colors group backdrop-blur-sm"
-                >
-                  <div className="w-8 h-8 bg-white/30 rounded-lg flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
-                    <Activity size={16} className="text-white" />
-                  </div>
-                  <span className="text-xs font-medium text-white">Manage Students</span>
-                </button>
-              </div>
             </div>
           </div>
         </div>
