@@ -461,58 +461,96 @@ const Reports = ({ currentUser }) => {
 
   const fetchStudents = async () => {
     try {
-      const response = await fetch(apiUrl('/api/sql/students'));
-      if (response.ok) {
-        const data = await response.json();
-        const studentsList = Array.isArray(data) ? data : (data.students || []);
-        // Normalize courses: convert to lowercase and trim, then create a map to preserve original casing
-        const courseMap = new Map();
-        studentsList.forEach(student => {
-          if (student && student.course) {
-            const normalized = student.course.toLowerCase().trim();
-            // Store the first occurrence with original casing
-            if (!courseMap.has(normalized)) {
-              courseMap.set(normalized, student.course.trim());
-            }
+      const courseMap = new Map();
+
+      // 1. Fetch all academic courses from the academic courses API
+      try {
+        const response = await fetch(apiUrl('/api/sql/academic/courses'));
+        if (response.ok) {
+          const academicCourses = await response.json();
+          if (Array.isArray(academicCourses)) {
+            academicCourses.forEach(c => {
+              const name = typeof c === 'string' ? c : (c?.displayName || c?.name);
+              if (name && typeof name === 'string' && name.trim()) {
+                const normalized = name.toLowerCase().trim();
+                if (!courseMap.has(normalized)) {
+                  courseMap.set(normalized, name.trim());
+                }
+              }
+            });
           }
-        });
-        const uniqueCourses = Array.from(courseMap.values());
-        setCourses(uniqueCourses);
+        }
+      } catch (err) {
+        console.warn('Error fetching academic courses:', err);
       }
+
+      // 2. Fetch students to discover any other legacy or custom courses
+      try {
+        const response = await fetch(apiUrl('/api/sql/students'));
+        if (response.ok) {
+          const data = await response.json();
+          const studentsList = Array.isArray(data) ? data : (data.students || []);
+          studentsList.forEach(student => {
+            if (student && student.course && typeof student.course === 'string' && student.course.trim()) {
+              const normalized = student.course.toLowerCase().trim();
+              if (!courseMap.has(normalized)) {
+                courseMap.set(normalized, student.course.trim());
+              }
+            }
+          });
+        }
+      } catch (err) {
+        console.warn('Error fetching students:', err);
+      }
+
+      const uniqueCourses = Array.from(courseMap.values());
+      setCourses(uniqueCourses);
     } catch (error) {
-      console.error('Error fetching students:', error);
+      console.error('Error fetching students and courses:', error);
     }
   };
 
   const courseOptions = useMemo(() => {
-    // If a college is selected, only show courses for that college
-    if (selectedCollege && selectedCollegeData?.courses) {
-      return [...selectedCollegeData.courses].sort((a, b) => a.localeCompare(b));
-    }
-
-    // Otherwise, show all unique courses from all students
+    // Show all unique courses for all users (Super Admin, Sub-Admin, and Staff)
     const normalizedMap = new Map();
-    courses.forEach(course => {
-      if (course) {
-        const normalized = course.toLowerCase().trim();
+
+    // 1. Academic & student courses
+    (courses || []).forEach(course => {
+      const courseName = typeof course === 'object' ? (course?.displayName || course?.name) : course;
+      if (courseName && typeof courseName === 'string' && courseName.trim()) {
+        const normalized = courseName.toLowerCase().trim();
         if (!normalizedMap.has(normalized)) {
-          normalizedMap.set(normalized, course.trim());
+          normalizedMap.set(normalized, courseName.trim());
         }
       }
     });
-    // Fallback: extract courses from loaded transactions as well
+
+    // 2. From all colleges (ensure any college-specific courses are also included)
+    (colleges || []).forEach(col => {
+      (col?.courses || []).forEach(c => {
+        if (c && typeof c === 'string' && c.trim()) {
+          const normalized = c.toLowerCase().trim();
+          if (!normalizedMap.has(normalized)) {
+            normalizedMap.set(normalized, c.trim());
+          }
+        }
+      });
+    });
+
+    // 3. Fallback: extract courses from loaded transactions as well
     (transactions || []).forEach(t => {
       const c = t.student?.course || t.employee?.department;
-      if (c) {
+      if (c && typeof c === 'string' && c.trim()) {
         const normalized = c.toLowerCase().trim();
         if (!normalizedMap.has(normalized)) {
           normalizedMap.set(normalized, c.trim());
         }
       }
     });
+
     return Array.from(normalizedMap.values())
       .sort((a, b) => a.localeCompare(b));
-  }, [courses, selectedCollege, selectedCollegeData, transactions]);
+  }, [courses, colleges, transactions]);
 
   useEffect(() => {
     fetchTransactions();
