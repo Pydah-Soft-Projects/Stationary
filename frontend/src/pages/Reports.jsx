@@ -92,6 +92,7 @@ const Reports = ({ currentUser }) => {
   const [salesSummaryData, setSalesSummaryData] = useState(null);
   const salesSummaryPrintRef = useRef(null);
   const [courses, setCourses] = useState([]);
+  const [courseIdToNameMap, setCourseIdToNameMap] = useState({});
   const [reportType, setReportType] = useState(''); // 'day-end', 'stock', 'vendor-purchase'
   const [receiptSettings, setReceiptSettings] = useState({
     receiptHeader: 'PYDAH COLLEGE OF ENGINEERING',
@@ -462,8 +463,9 @@ const Reports = ({ currentUser }) => {
   const fetchStudents = async () => {
     try {
       const courseMap = new Map();
+      const idMap = {};
 
-      // 1. Fetch all academic courses from the academic courses API
+      // 1. Fetch all academic courses from the academic courses API (master source)
       try {
         const response = await fetch(apiUrl('/api/sql/academic/courses'));
         if (response.ok) {
@@ -472,9 +474,15 @@ const Reports = ({ currentUser }) => {
             academicCourses.forEach(c => {
               const name = typeof c === 'string' ? c : (c?.displayName || c?.name);
               if (name && typeof name === 'string' && name.trim()) {
-                const normalized = name.toLowerCase().trim();
-                if (!courseMap.has(normalized)) {
-                  courseMap.set(normalized, name.trim());
+                const trimmed = name.trim();
+                if (!/^\d+$/.test(trimmed)) {
+                  const normalized = trimmed.toLowerCase();
+                  if (!courseMap.has(normalized)) {
+                    courseMap.set(normalized, trimmed);
+                  }
+                  if (c?.id !== undefined && c?.id !== null) {
+                    idMap[String(c.id)] = trimmed;
+                  }
                 }
               }
             });
@@ -484,73 +492,107 @@ const Reports = ({ currentUser }) => {
         console.warn('Error fetching academic courses:', err);
       }
 
-      // 2. Fetch students to discover any other legacy or custom courses
-      try {
-        const response = await fetch(apiUrl('/api/sql/students'));
-        if (response.ok) {
-          const data = await response.json();
-          const studentsList = Array.isArray(data) ? data : (data.students || []);
-          studentsList.forEach(student => {
-            if (student && student.course && typeof student.course === 'string' && student.course.trim()) {
-              const normalized = student.course.toLowerCase().trim();
-              if (!courseMap.has(normalized)) {
-                courseMap.set(normalized, student.course.trim());
+      // 2. Fallback to students API ONLY if academic courses API returned no courses
+      if (courseMap.size === 0) {
+        try {
+          const response = await fetch(apiUrl('/api/sql/students'));
+          if (response.ok) {
+            const data = await response.json();
+            const studentsList = Array.isArray(data) ? data : (data.students || data.rows || []);
+            studentsList.forEach(student => {
+              if (student && student.course && typeof student.course === 'string') {
+                let courseName = student.course.trim();
+                if (/^diploma\s+in\s+/i.test(courseName)) {
+                  courseName = 'DIPLOMA';
+                }
+                const lower = courseName.toLowerCase();
+                const nonAcademic = ['n/a', 'na', 'general', 'null', 'undefined', 'admin office', 'admissions cell', 'office'];
+                if (courseName && !/^\d+$/.test(courseName) && !nonAcademic.includes(lower)) {
+                  if (!courseMap.has(lower)) {
+                    courseMap.set(lower, courseName);
+                  }
+                }
               }
-            }
-          });
+            });
+          }
+        } catch (err) {
+          console.warn('Error fetching students:', err);
         }
-      } catch (err) {
-        console.warn('Error fetching students:', err);
       }
 
       const uniqueCourses = Array.from(courseMap.values());
       setCourses(uniqueCourses);
+      setCourseIdToNameMap(idMap);
     } catch (error) {
       console.error('Error fetching students and courses:', error);
     }
   };
 
   const courseOptions = useMemo(() => {
-    // Show all unique courses for all users (Super Admin, Sub-Admin, and Staff)
+    // Show clean academic courses for all users (Super Admin, Sub-Admin, and Staff)
     const normalizedMap = new Map();
 
-    // 1. Academic & student courses
-    (courses || []).forEach(course => {
-      const courseName = typeof course === 'object' ? (course?.displayName || course?.name) : course;
-      if (courseName && typeof courseName === 'string' && courseName.trim()) {
-        const normalized = courseName.toLowerCase().trim();
-        if (!normalizedMap.has(normalized)) {
-          normalizedMap.set(normalized, courseName.trim());
+    const addValidCourse = (raw) => {
+      if (!raw) return;
+      let val = typeof raw === 'object' ? (raw?.displayName || raw?.name) : String(raw);
+      if (typeof val !== 'string') return;
+      val = val.trim();
+      if (!val) return;
+
+      // 1. If it's a numeric ID (e.g. "1", "10"), resolve via courseIdToNameMap
+      if (/^\d+$/.test(val)) {
+        if (courseIdToNameMap && courseIdToNameMap[val]) {
+          val = courseIdToNameMap[val];
+        } else {
+          // Never add raw numeric IDs as course names
+          return;
         }
       }
+
+      // 2. Reject any remaining numbers
+      if (/^\d+$/.test(val)) return;
+
+      // 3. Reject employee departments, administrative branches, and non-course values
+      const lower = val.toLowerCase();
+      const nonAcademic = [
+        'admin office', 'admissions cell', 'office', 'central office',
+        'n/a', 'na', 'general', 'null', 'undefined', 'all'
+      ];
+      if (nonAcademic.includes(lower)) return;
+
+      // 4. Normalize branches like "DIPLOMA IN ..." to "DIPLOMA"
+      if (/^diploma\s+in\s+/i.test(val)) {
+        val = 'DIPLOMA';
+      }
+
+      const key = val.toLowerCase();
+      if (!normalizedMap.has(key)) {
+        normalizedMap.set(key, val);
+      }
+    };
+
+    // 1. Master academic & student courses
+    (courses || []).forEach(course => {
+      addValidCourse(course);
     });
 
-    // 2. From all colleges (ensure any college-specific courses are also included)
+    // 2. From all colleges (resolve IDs to course names if needed)
     (colleges || []).forEach(col => {
       (col?.courses || []).forEach(c => {
-        if (c && typeof c === 'string' && c.trim()) {
-          const normalized = c.toLowerCase().trim();
-          if (!normalizedMap.has(normalized)) {
-            normalizedMap.set(normalized, c.trim());
-          }
-        }
+        addValidCourse(c);
       });
     });
 
-    // 3. Fallback: extract courses from loaded transactions as well
+    // 3. From loaded transactions (only student courses, never employee departments)
     (transactions || []).forEach(t => {
-      const c = t.student?.course || t.employee?.department;
-      if (c && typeof c === 'string' && c.trim()) {
-        const normalized = c.toLowerCase().trim();
-        if (!normalizedMap.has(normalized)) {
-          normalizedMap.set(normalized, c.trim());
-        }
+      if (t.student?.course) {
+        addValidCourse(t.student.course);
       }
     });
 
     return Array.from(normalizedMap.values())
       .sort((a, b) => a.localeCompare(b));
-  }, [courses, colleges, transactions]);
+  }, [courses, colleges, transactions, courseIdToNameMap]);
 
   useEffect(() => {
     fetchTransactions();
