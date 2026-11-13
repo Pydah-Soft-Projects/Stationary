@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Transaction Abstract</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .animate-fade-in {
+      animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    /* Custom subtle scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen p-3 sm:p-6 lg:p-8">
+
+  <div class="max-w-7xl mx-auto space-y-6 animate-fade-in">
+
+    <!-- Top Header -->
+    <header class="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/80 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-sm">
+            <!-- Receipt / Bar Chart Icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">Daily Transaction Abstract</h1>
+            <p class="text-xs sm:text-sm text-slate-500 mt-0.5" id="currentDateDisplay">Overview of financial and transaction performance</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Date Filter & Quick Actions -->
+      <div class="flex flex-wrap items-center gap-2.5">
+        <div class="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200">
+          <button id="btnToday" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-indigo-600 shadow-xs transition-all">Today</button>
+          <button id="btnYesterday" class="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900 transition-all">Yesterday</button>
+          <button id="btn7Days" class="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900 transition-all">7 Days Avg</button>
+        </div>
+
+        <div class="relative">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <input 
+            type="date" 
+            id="filterDate"
+            class="pl-9 pr-3 py-1.5 text-xs font-medium bg-white text-slate-700 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 shadow-xs cursor-pointer transition-all"
+          />
+        </div>
+
+        <div class="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-xl text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>Live Gateway</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main 60 / 40 Responsive Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+      <!-- LEFT SIDE (~60% width on desktop: col-span-7 or 8) -->
+      <section class="lg:col-span-7 space-y-6">
+
+        <!-- Chart Container Card -->
+        <div class="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200/80 shadow-sm hover:shadow-md transition-shadow duration-300">
+          
+          <!-- Chart Header & Mode Controls -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-base sm:text-lg font-bold text-slate-900">Hourly Transaction Trend</h2>
+                <span id="chartSubBadge" class="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                  Peak: 2:00 PM (184 txns)
+                </span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">Real-time volume distribution throughout business hours</p>
+            </div>
+
+            <!-- View Mode Switcher -->
+            <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-xl self-start sm:self-auto border border-slate-200/70">
+              <button id="viewAll" class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-white text-slate-800 shadow-xs transition-all">All</button>
+              <button id="viewSuccess" class="px-2.5 py-1 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900 transition-all">Success</button>
+              <button id="viewFailed" class="px-2.5 py-1 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900 transition-all">Failed</button>
+            </div>
+          </div>
+
+          <!-- Key Trend Micro-Stats Bar -->
+          <div class="grid grid-cols-3 gap-3 py-3.5 my-3 bg-slate-50/80 rounded-xl px-4 border border-slate-100">
+            <div>
+              <p class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Avg / Hour</p>
+              <p id="statAvgHour" class="text-base sm:text-lg font-bold text-slate-900">107 <span class="text-[11px] font-normal text-slate-500">txns</span></p>
+            </div>
+            <div>
+              <p class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Busiest Window</p>
+              <p id="statBusiest" class="text-base sm:text-lg font-bold text-indigo-600">1 PM - 4 PM</p>
+            </div>
+            <div>
+              <p class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">Health Index</p>
+              <div class="flex items-center gap-1.5 mt-0.5">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <p id="statHealth" class="text-base sm:text-lg font-bold text-emerald-600">96.7%</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chart Canvas Area -->
+          <div class="relative w-full h-[320px] sm:h-[350px] mt-2">
+            <canvas id="hourlyTrendChart"></canvas>
+            <div id="chartFallback" class="hidden absolute inset-0 flex items-center justify-center bg-slate-50/50 rounded-xl">
+              <p class="text-xs text-slate-400">Rendering chart...</p>
+            </div>
+          </div>
+
+          <!-- Interactive Legend & Note -->
+          <div class="flex flex-wrap items-center justify-between pt-4 mt-2 border-t border-slate-100 text-xs text-slate-500 gap-2">
+            <div class="flex items-center gap-4">
+              <span class="inline-flex items-center gap-1.5">
+                <span class="w-3 h-3 rounded-full bg-indigo-500"></span>
+                <span class="font-medium text-slate-700">Total Volume</span>
+              </span>
+              <span class="inline-flex items-center gap-1.5">
+                <span class="w-3 h-3 rounded-full bg-emerald-500"></span>
+                <span class="font-medium text-slate-700">Success</span>
+              </span>
+              <span class="inline-flex items-center gap-1.5">
+                <span class="w-3 h-3 rounded-full bg-rose-500"></span>
+                <span class="font-medium text-slate-700">Failed</span>
+              </span>
+            </div>
+            <span class="text-[11px] text-slate-400">Updated every 60s • Auto-synced</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- RIGHT SIDE (~40% width on desktop: col-span-5) -->
+      <aside class="lg:col-span-5 space-y-4">
+
+        <!-- 1. TOTAL VOLUME CARD -->
+        <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all duration-300 group">
+          <div class="flex items-start justify-between">
+            <div class="space-y-1">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Volume</span>
+              <div class="flex items-baseline gap-2">
+                <span id="metricTotalVolume" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">1,284</span>
+                <span class="text-xs font-medium text-slate-400">transactions</span>
+              </div>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 group-hover:scale-105 transition-transform">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+            </div>
+          </div>
+
+          <!-- Trend Badge & Sparkline Simulation -->
+          <div class="mt-3 flex items-center justify-between">
+            <span class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+              </svg>
+              +12.8% vs yesterday
+            </span>
+            <span class="text-xs text-slate-400 font-medium">Goal: 1,500</span>
+          </div>
+
+          <!-- Mini Progress Indicator -->
+          <div class="mt-3.5 space-y-1.5">
+            <div class="flex justify-between text-[11px] font-medium text-slate-500">
+              <span>Daily Target Pace</span>
+              <span class="text-indigo-600 font-semibold">85.6%</span>
+            </div>
+            <div class="w-full h-2 bg-slate-100 rounded-full overflow-hidden p-0.5">
+              <div class="h-full bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-full transition-all duration-700" style="width: 85.6%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. NET REVENUE CARD -->
+        <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-emerald-200 transition-all duration-300 group">
+          <div class="flex items-start justify-between">
+            <div class="space-y-1">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Net Revenue</span>
+              <div class="flex items-baseline gap-2">
+                <span id="metricNetRevenue" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">₹2,48,650</span>
+                <span class="text-xs font-medium text-slate-400">INR</span>
+              </div>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 group-hover:scale-105 transition-transform">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
+
+          <div class="mt-3 flex items-center justify-between">
+            <span class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+              </svg>
+              +8.4% vs yesterday
+            </span>
+            <span class="text-xs text-slate-500 font-medium">Avg Txn: <b class="text-slate-800">₹193.65</b></span>
+          </div>
+
+          <!-- Split Progress Bar: Cash vs Online -->
+          <div class="mt-3.5 pt-3 border-t border-slate-100">
+            <div class="flex items-center justify-between text-[11px] mb-1.5 font-medium">
+              <span class="flex items-center gap-1.5 text-slate-600">
+                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Cash: <span class="font-bold text-slate-900" id="metricCashRevenue">₹1,64,200</span> (66%)
+              </span>
+              <span class="flex items-center gap-1.5 text-slate-600">
+                <span class="w-2 h-2 rounded-full bg-sky-500"></span> Online: <span class="font-bold text-slate-900" id="metricOnlineRevenue">₹84,450</span> (34%)
+              </span>
+            </div>
+            <!-- Stacked Bar Graph -->
+            <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex">
+              <div class="h-full bg-emerald-500 transition-all duration-700" style="width: 66%" title="Cash: 66%"></div>
+              <div class="h-full bg-sky-500 transition-all duration-700" style="width: 34%" title="Online: 34%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. SUCCESSFUL TRANSACTIONS CARD -->
+        <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-teal-200 transition-all duration-300 group">
+          <div class="flex items-start justify-between">
+            <div class="space-y-1">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Successful Transactions</span>
+              <div class="flex items-baseline gap-2">
+                <span id="metricSuccessCount" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">1,242</span>
+                <span class="text-xs font-bold text-emerald-600">96.7%</span>
+              </div>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 group-hover:scale-105 transition-transform">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+          </div>
+
+          <!-- Micro Sparkline Bars for Success Rate across 6 intervals -->
+          <div class="mt-4 flex items-center justify-between gap-2">
+            <div class="flex-1">
+              <div class="flex justify-between text-[11px] text-slate-500 mb-1">
+                <span>Hourly Clearance</span>
+                <span class="text-teal-700 font-semibold">Optimal</span>
+              </div>
+              <div class="flex items-end gap-1.5 h-6">
+                <div class="flex-1 bg-teal-200 rounded-t h-[60%]" title="8-10 AM: 95%"></div>
+                <div class="flex-1 bg-teal-300 rounded-t h-[75%]" title="10-12 PM: 96%"></div>
+                <div class="flex-1 bg-teal-400 rounded-t h-[90%]" title="12-2 PM: 98%"></div>
+                <div class="flex-1 bg-teal-500 rounded-t h-[100%]" title="2-4 PM: 99%"></div>
+                <div class="flex-1 bg-teal-400 rounded-t h-[80%]" title="4-6 PM: 97%"></div>
+                <div class="flex-1 bg-teal-300 rounded-t h-[70%]" title="6-8 PM: 95%"></div>
+              </div>
+            </div>
+            <span class="text-[11px] font-semibold text-teal-800 bg-teal-50 px-2 py-1 rounded-lg border border-teal-200/80">
+              Low Latency (&lt;240ms)
+            </span>
+          </div>
+        </div>
+
+        <!-- 4. FAILED TRANSACTIONS CARD -->
+        <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm hover:shadow-md hover:border-rose-200 transition-all duration-300 group">
+          <div class="flex items-start justify-between">
+            <div class="space-y-1">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Failed / Incomplete</span>
+              <div class="flex items-baseline gap-2">
+                <span id="metricFailedCount" class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">42</span>
+                <span class="text-xs font-medium text-rose-600 font-semibold">3.3% loss</span>
+              </div>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 group-hover:scale-105 transition-transform">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+          </div>
+
+          <div class="mt-3 flex items-center justify-between">
+            <span class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
+              -1.2% drop vs yesterday
+            </span>
+            <span class="text-xs text-slate-500 font-medium">Gateway Timeout: 28</span>
+          </div>
+
+          <!-- Micro Breakdown Pills -->
+          <div class="mt-3.5 pt-2.5 border-t border-slate-100 flex items-center gap-2 flex-wrap">
+            <span class="text-[10px] font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+              UPI Timeout: <b>28</b>
+            </span>
+            <span class="text-[10px] font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+              User Cancelled: <b>9</b>
+            </span>
+            <span class="text-[10px] font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+              Bank Decline: <b>5</b>
+            </span>
+          </div>
+        </div>
+
+      </aside>
+
+    </div>
+
+  </div>
+
+  <!-- Client-side Interactive Logic & Chart Initialization -->
+  <script>
+    // Dataset for Different Date Selections
+    const datasets = {
+      today: {
+        dateStr: 'Today • Thursday, 13 Nov 2026',
+        labels: ['8 AM', '9 AM', '10 AM', '11 AM', '12 PM', '1 PM', '2 PM', '3 PM', '4 PM', '5 PM', '6 PM', '7 PM'],
+        total: [34, 68, 125, 142, 110, 165, 184, 156, 138, 92, 54, 16],
+        success: [33, 66, 121, 137, 107, 160, 179, 151, 134, 89, 52, 13],
+        failed: [1, 2, 4, 5, 3, 5, 5, 5, 4, 3, 2, 3],
+        metrics: {
+          volume: '1,284',
+          revenue: '₹2,48,650',
+          cash: '₹1,64,200',
+          online: '₹84,450',
+          success: '1,242',
+          failed: '42',
+          avgHour: '107',
+          busiest: '1 PM - 4 PM',
+          health: '96.7%',
+          peak: 'Peak: 2:00 PM (184 txns)'
+        }
+      },
+      yesterday: {
+        dateStr: 'Yesterday • Wednesday, 12 Nov 2026',
+        labels: ['8 AM', '9 AM', '10 AM', '11 AM', '12 PM', '1 PM', '2 PM', '3 PM', '4 PM', '5 PM', '6 PM', '7 PM'],
+        total: [28, 55, 110, 128, 98, 145, 162, 140, 120, 80, 48, 14],
+        success: [26, 52, 105, 122, 94, 139, 155, 134, 115, 77, 46, 13],
+        failed: [2, 3, 5, 6, 4, 6, 7, 6, 5, 3, 2, 1],
+        metrics: {
+          volume: '1,128',
+          revenue: '₹2,29,380',
+          cash: '₹1,51,000',
+          online: '₹78,380',
+          success: '1,078',
+          failed: '50',
+          avgHour: '94',
+          busiest: '1 PM - 3 PM',
+          health: '95.6%',
+          peak: 'Peak: 2:00 PM (162 txns)'
+        }
+      },
+      avg7days: {
+        dateStr: '7-Day Rolling Average',
+        labels: ['8 AM', '9 AM', '10 AM', '11 AM', '12 PM', '1 PM', '2 PM', '3 PM', '4 PM', '5 PM', '6 PM', '7 PM'],
+        total: [30, 60, 118, 135, 105, 155, 172, 148, 130, 86, 50, 15],
+        success: [29, 58, 114, 130, 101, 150, 166, 143, 126, 83, 48, 14],
+        failed: [1, 2, 4, 5, 4, 5, 6, 5, 4, 3, 2, 1],
+        metrics: {
+          volume: '1,204',
+          revenue: '₹2,38,500',
+          cash: '₹1,58,000',
+          online: '₹80,500',
+          success: '1,162',
+          failed: '42',
+          avgHour: '100',
+          busiest: '1 PM - 4 PM',
+          health: '96.5%',
+          peak: 'Peak: 2:00 PM (172 txns)'
+        }
+      }
+    };
+
+    let currentDatasetKey = 'today';
+    let currentViewMode = 'all'; // 'all', 'success', 'failed'
+    let chartInstance = null;
+
+    // Set initial date picker value
+    const todayISO = new Date().toISOString().split('T')[0];
+    document.getElementById('filterDate').value = todayISO;
+
+    // Update DOM Metrics with Smooth Animation
+    function updateMetrics(data) {
+      document.getElementById('currentDateDisplay').textContent = data.dateStr;
+      document.getElementById('metricTotalVolume').textContent = data.metrics.volume;
+      document.getElementById('metricNetRevenue').textContent = data.metrics.revenue;
+      document.getElementById('metricCashRevenue').textContent = data.metrics.cash;
+      document.getElementById('metricOnlineRevenue').textContent = data.metrics.online;
+      document.getElementById('metricSuccessCount').textContent = data.metrics.success;
+      document.getElementById('metricFailedCount').textContent = data.metrics.failed;
+      document.getElementById('statAvgHour').innerHTML = `${data.metrics.avgHour} <span class="text-[11px] font-normal text-slate-500">txns</span>`;
+      document.getElementById('statBusiest').textContent = data.metrics.busiest;
+      document.getElementById('statHealth').textContent = data.metrics.health;
+      document.getElementById('chartSubBadge').textContent = data.metrics.peak;
+    }
+
+    // Initialize or Update Chart.js
+    function initOrUpdateChart() {
+      const ctx = document.getElementById('hourlyTrendChart');
+      if (!ctx) return;
+
+      const data = datasets[currentDatasetKey];
+
+      // Prepare datasets according to view mode
+      let chartDatasets = [];
+
+      if (currentViewMode === 'all' || currentViewMode === 'total') {
+        chartDatasets.push({
+          label: 'Total Volume',
+          data: data.total,
+          borderColor: '#6366f1', // Indigo 500
+          backgroundColor: (context) => {
+            const chart = context.chart;
+            const { ctx, chartArea } = chart;
+            if (!chartArea) return 'rgba(99, 102, 241, 0.1)';
+            const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+            gradient.addColorStop(0, 'rgba(99, 102, 241, 0.28)');
+            gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
+            return gradient;
+          },
+          borderWidth: 2.5,
+          pointBackgroundColor: '#6366f1',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointHoverBackgroundColor: '#4f46e5',
+          fill: true,
+          tension: 0.42
+        });
+      }
+
+      if (currentViewMode === 'all' || currentViewMode === 'success') {
+        chartDatasets.push({
+          label: 'Success',
+          data: data.success,
+          borderColor: '#10b981', // Emerald 500
+          backgroundColor: (context) => {
+            const chart = context.chart;
+            const { ctx, chartArea } = chart;
+            if (!chartArea) return 'rgba(16, 185, 129, 0.05)';
+            const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+            gradient.addColorStop(0, 'rgba(16, 185, 129, 0.18)');
+            gradient.addColorStop(1, 'rgba(16, 185, 129, 0.0)');
+            return gradient;
+          },
+          borderWidth: 2,
+          borderDash: currentViewMode === 'all' ? [4, 4] : [],
+          pointBackgroundColor: '#10b981',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          pointRadius: currentViewMode === 'all' ? 3 : 4,
+          pointHoverRadius: 6,
+          fill: currentViewMode === 'success',
+          tension: 0.42
+        });
+      }
+
+      if (currentViewMode === 'all' || currentViewMode === 'failed') {
+        chartDatasets.push({
+          label: 'Failed',
+          data: data.failed,
+          borderColor: '#f43f5e', // Rose 500
+          backgroundColor: (context) => {
+            const chart = context.chart;
+            const { ctx, chartArea } = chart;
+            if (!chartArea) return 'rgba(244, 63, 94, 0.05)';
+            const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+            gradient.addColorStop(0, 'rgba(244, 63, 94, 0.2)');
+            gradient.addColorStop(1, 'rgba(244, 63, 94, 0.0)');
+            return gradient;
+          },
+          borderWidth: 2,
+          pointBackgroundColor: '#f43f5e',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 2,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          fill: currentViewMode === 'failed',
+          tension: 0.35
+        });
+      }
+
+      if (chartInstance) {
+        chartInstance.data.labels = data.labels;
+        chartInstance.data.datasets = chartDatasets;
+        chartInstance.update();
+        return;
+      }
+
+      // Check if Chart.js is loaded
+      if (typeof Chart === 'undefined') {
+        renderCanvasFallback(data);
+        return;
+      }
+
+      chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: data.labels,
+          datasets: chartDatasets
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: 'index',
+            intersect: false
+          },
+          plugins: {
+            legend: {
+              display: false // Using custom HTML legend for cleaner UI
+            },
+            tooltip: {
+              backgroundColor: 'rgba(15, 23, 42, 0.92)',
+              titleFont: { family: 'Plus Jakarta Sans', size: 12, weight: 'bold' },
+              bodyFont: { family: 'Plus Jakarta Sans', size: 12 },
+              padding: 10,
+              cornerRadius: 10,
+              boxPadding: 4,
+              usePointStyle: true,
+              callbacks: {
+                label: function(context) {
+                  return ` ${context.dataset.label}: ${context.parsed.y} txns`;
+                }
+              }
+            }
+          },
+          scales: {
+            x: {
+              grid: {
+                display: false
+              },
+              ticks: {
+                color: '#94a3b8',
+                font: { family: 'Plus Jakarta Sans', size: 11 }
+              }
+            },
+            y: {
+              beginAtZero: true,
+              grid: {
+                color: '#f1f5f9'
+              },
+              ticks: {
+                color: '#94a3b8',
+                font: { family: 'Plus Jakarta Sans', size: 11 },
+                callback: function(value) {
+                  return value;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // Pure HTML5 Canvas Fallback if Chart.js CDN is unavailable
+    function renderCanvasFallback(data) {
+      const canvas = document.getElementById('hourlyTrendChart');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const width = canvas.parentElement.clientWidth;
+      const height = canvas.parentElement.clientHeight;
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      ctx.scale(dpr, dpr);
+
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw Grid Lines
+      ctx.strokeStyle = '#f1f5f9';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const y = 30 + (i * (height - 70) / 4);
+        ctx.beginPath();
+        ctx.moveTo(40, y);
+        ctx.lineTo(width - 20, y);
+        ctx.stroke();
+      }
+
+      // Draw Values
+      const maxVal = Math.max(...data.total) * 1.15;
+      const stepX = (width - 70) / (data.labels.length - 1);
+
+      // Area Gradient
+      const grad = ctx.createLinearGradient(0, 20, 0, height - 40);
+      grad.addColorStop(0, 'rgba(99, 102, 241, 0.25)');
+      grad.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
+
+      ctx.beginPath();
+      data.total.forEach((val, idx) => {
+        const x = 45 + (idx * stepX);
+        const y = (height - 40) - ((val / maxVal) * (height - 70));
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.lineTo(45 + ((data.total.length - 1) * stepX), height - 40);
+      ctx.lineTo(45, height - 40);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // Line
+      ctx.beginPath();
+      ctx.strokeStyle = '#6366f1';
+      ctx.lineWidth = 3;
+      data.total.forEach((val, idx) => {
+        const x = 45 + (idx * stepX);
+        const y = (height - 40) - ((val / maxVal) * (height - 70));
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+
+      // Points & X Labels
+      ctx.font = '10px "Plus Jakarta Sans", sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.textAlign = 'center';
+      data.total.forEach((val, idx) => {
+        const x = 45 + (idx * stepX);
+        const y = (height - 40) - ((val / maxVal) * (height - 70));
+        
+        ctx.beginPath();
+        ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#6366f1';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText(data.labels[idx], x, height - 15);
+      });
+    }
+
+    // Quick Date Filter Buttons Event Handlers
+    function setDateFilter(key, btnActive) {
+      currentDatasetKey = key;
+      updateMetrics(datasets[key]);
+      initOrUpdateChart();
+
+      ['btnToday', 'btnYesterday', 'btn7Days'].forEach(id => {
+        const b = document.getElementById(id);
+        b.className = 'px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900 transition-all';
+      });
+      btnActive.className = 'px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-indigo-600 shadow-xs transition-all';
+    }
+
+    document.getElementById('btnToday').addEventListener('click', function() {
+      setDateFilter('today', this);
+    });
+    document.getElementById('btnYesterday').addEventListener('click', function() {
+      setDateFilter('yesterday', this);
+    });
+    document.getElementById('btn7Days').addEventListener('click', function() {
+      setDateFilter('avg7days', this);
+    });
+
+    // Date Picker Input Handler
+    document.getElementById('filterDate').addEventListener('change', function(e) {
+      // Pick random slight variance for demonstration if a different date is picked
+      const isPast = new Date(e.target.value) < new Date(todayISO);
+      const chosenKey = isPast ? 'yesterday' : 'today';
+      currentDatasetKey = chosenKey;
+      datasets[chosenKey].dateStr = `Filtered Date • ${e.target.value}`;
+      updateMetrics(datasets[chosenKey]);
+      initOrUpdateChart();
+    });
+
+    // View Mode Switcher Handlers
+    function setViewMode(mode, activeBtn) {
+      currentViewMode = mode;
+      ['viewAll', 'viewSuccess', 'viewFailed'].forEach(id => {
+        const b = document.getElementById(id);
+        b.className = 'px-2.5 py-1 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900 transition-all';
+      });
+      activeBtn.className = 'px-2.5 py-1 text-xs font-semibold rounded-lg bg-white text-slate-800 shadow-xs transition-all';
+      initOrUpdateChart();
+    }
+
+    document.getElementById('viewAll').addEventListener('click', function() {
+      setViewMode('all', this);
+    });
+    document.getElementById('viewSuccess').addEventListener('click', function() {
+      setViewMode('success', this);
+    });
+    document.getElementById('viewFailed').addEventListener('click', function() {
+      setViewMode('failed', this);
+    });
+
+    // Handle Window Resize for Canvas / Chart
+    window.addEventListener('resize', () => {
+      if (chartInstance) {
+        chartInstance.resize();
+      } else {
+        renderCanvasFallback(datasets[currentDatasetKey]);
+      }
+    });
+
+    // Initial Execution
+    document.addEventListener('DOMContentLoaded', () => {
+      updateMetrics(datasets.today);
+      initOrUpdateChart();
+    });
+
+    // Fallback trigger in case DOMContentLoaded has already fired
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      setTimeout(() => {
+        updateMetrics(datasets.today);
+        initOrUpdateChart();
+      }, 50);
+    }
+  </script>
+</body>
+</html>

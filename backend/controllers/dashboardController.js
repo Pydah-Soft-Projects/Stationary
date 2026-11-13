@@ -191,7 +191,7 @@ const getDashboardStats = asyncHandler(async (req, res) => {
   // --- Recent Transactions ---
   const recentTransactions = await Transaction.find(filter)
     .sort({ transactionDate: -1 })
-    .limit(5)
+    .limit(8)
     .lean();
 
   // --- Zero-Stock Dues List ---
@@ -264,6 +264,134 @@ const getDashboardStats = asyncHandler(async (req, res) => {
 
   const zeroStockDuesStudents = zeroStockDuesData.length;
 
+  // --- Abstract Timeline & Graphical Chart Data ---
+  const isSingleDay = abstractStart.toDateString() === abstractEnd.toDateString();
+
+  // If single day (default Today), chart the recent 5 days for the graphical bar graph
+  let chartStart = new Date(abstractStart);
+  let chartEnd = new Date(abstractEnd);
+
+  if (isSingleDay) {
+    chartStart = new Date(abstractStart);
+    chartStart.setDate(chartStart.getDate() - 4);
+    chartStart.setHours(0, 0, 0, 0);
+  }
+
+  const abstractTxFilter = {
+    transactionDate: { $gte: chartStart, $lte: chartEnd }
+  };
+  if (collegeId) {
+    abstractTxFilter.collegeId = new mongoose.Types.ObjectId(collegeId);
+  }
+
+  const abstractTransactions = await Transaction.find(abstractTxFilter)
+    .select('totalAmount cashAmount onlineAmount isPaid paymentMethod transactionDate')
+    .lean();
+
+  const timelineMap = new Map();
+
+  let chartCashTotal = 0;
+  let chartOnlineTotal = 0;
+  let chartCashCount = 0;
+  let chartOnlineCount = 0;
+  let chartPaidCount = 0;
+  let chartUnpaidCount = 0;
+
+  // Build daily buckets from chartStart to chartEnd
+  const cur = new Date(chartStart);
+  cur.setHours(0, 0, 0, 0);
+  const endBoundary = new Date(chartEnd);
+
+  while (cur <= endBoundary) {
+    const yyyy = cur.getFullYear();
+    const mm = String(cur.getMonth() + 1).padStart(2, '0');
+    const dd = String(cur.getDate()).padStart(2, '0');
+    const dateKey = `${yyyy}-${mm}-${dd}`;
+    const dayLabel = cur.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const shortLabel = `${cur.getDate()} ${cur.toLocaleDateString('en-US', { month: 'short' })}`;
+
+    timelineMap.set(dateKey, {
+      key: dateKey,
+      label: dayLabel,
+      shortLabel,
+      revenue: 0,
+      cash: 0,
+      online: 0,
+      transactions: 0
+    });
+
+    cur.setDate(cur.getDate() + 1);
+  }
+
+  abstractTransactions.forEach(tx => {
+    const txDate = new Date(tx.transactionDate);
+    const isPaid = Boolean(tx.isPaid);
+    const amount = Number(tx.totalAmount) || 0;
+    const cash = Number(tx.cashAmount) || 0;
+    const online = Number(tx.onlineAmount) || 0;
+
+    if (isPaid) {
+      chartPaidCount++;
+      chartCashTotal += cash;
+      chartOnlineTotal += online;
+      if (cash > 0) chartCashCount++;
+      if (online > 0) chartOnlineCount++;
+    } else {
+      chartUnpaidCount++;
+    }
+
+    const yyyy = txDate.getFullYear();
+    const mm = String(txDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(txDate.getDate()).padStart(2, '0');
+    const dateKey = `${yyyy}-${mm}-${dd}`;
+
+    if (timelineMap.has(dateKey)) {
+      const bucket = timelineMap.get(dateKey);
+      bucket.transactions++;
+      if (isPaid) {
+        bucket.revenue += amount;
+        bucket.cash += cash;
+        bucket.online += online;
+      }
+    }
+  });
+
+  const chartTimeline = Array.from(timelineMap.values());
+  chartTimeline.sort((a, b) => String(a.key).localeCompare(String(b.key)));
+
+  const chartTotalRevenue = chartCashTotal + chartOnlineTotal;
+  const chartCashPercent = chartTotalRevenue > 0 ? Math.round((chartCashTotal / chartTotalRevenue) * 100) : 0;
+  const chartOnlinePercent = chartTotalRevenue > 0 ? Math.max(0, 100 - chartCashPercent) : 0;
+
+  const abstractChartData = {
+    isSingleDay,
+    isRecent5Days: isSingleDay,
+    startDate: chartStart.toISOString().split('T')[0],
+    endDate: chartEnd.toISOString().split('T')[0],
+    timeline: chartTimeline,
+    paymentBreakdown: {
+      cashAmount: chartCashTotal,
+      onlineAmount: chartOnlineTotal,
+      totalRevenue: chartTotalRevenue,
+      cashPercent: chartCashPercent,
+      onlinePercent: chartOnlinePercent,
+      cashCount: chartCashCount,
+      onlineCount: chartOnlineCount,
+      paidTransactions: chartPaidCount,
+      unpaidTransactions: chartUnpaidCount,
+      totalTransactions: abstractTransactions.length
+    }
+  };
+
+  let latestTransactionDate = null;
+  if (recentTransactions.length > 0 && recentTransactions[0].transactionDate) {
+    const d = new Date(recentTransactions[0].transactionDate);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    latestTransactionDate = `${yyyy}-${mm}-${dd}`;
+  }
+
   res.json({
     totalStudents,
     paidStudents: 0, // Placeholder till SQL logic refined
@@ -280,7 +408,9 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     todayOnlineRevenue: rev.todayOnlineRevenue || 0,
     zeroStockDuesStudents,
     zeroStockDuesData,
-    recentTransactions
+    recentTransactions,
+    abstractChartData,
+    latestTransactionDate
   });
 });
 
