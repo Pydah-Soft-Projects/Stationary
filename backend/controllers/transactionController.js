@@ -722,7 +722,7 @@ const getAllTransactions = asyncHandler(async (req, res) => {
     if (year !== undefined && year !== '') {
       const parsedYear = Number(year);
       if (!Number.isNaN(parsedYear)) {
-        filter['student.year'] = parsedYear;
+        filter['student.year'] = { $in: [parsedYear, String(parsedYear)] };
       }
     }
     

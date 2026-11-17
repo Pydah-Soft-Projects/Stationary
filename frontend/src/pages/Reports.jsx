@@ -76,6 +76,8 @@ const Reports = ({ currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     course: '',
+    branch: '',
+    year: '',
     studentId: '',
     transactionType: '',
     paymentMethod: '',
@@ -92,6 +94,7 @@ const Reports = ({ currentUser }) => {
   const [salesSummaryData, setSalesSummaryData] = useState(null);
   const salesSummaryPrintRef = useRef(null);
   const [courses, setCourses] = useState([]);
+  const [academicCourses, setAcademicCourses] = useState([]);
   const [courseIdToNameMap, setCourseIdToNameMap] = useState({});
   const [reportType, setReportType] = useState(''); // 'day-end', 'stock', 'vendor-purchase'
   const [receiptSettings, setReceiptSettings] = useState({
@@ -101,6 +104,8 @@ const Reports = ({ currentUser }) => {
 
   const [reportFilters, setReportFilters] = useState({
     course: '',
+    branch: '',
+    year: '',
     paymentMethod: '',
     isPaid: '',
     startDate: getTodayDate(),
@@ -325,6 +330,8 @@ const Reports = ({ currentUser }) => {
 
       const baseParams = new URLSearchParams();
       if (filters.course) baseParams.append('course', filters.course);
+      if (filters.branch) baseParams.append('branch', filters.branch);
+      if (filters.year) baseParams.append('year', filters.year);
       if (filters.studentId) baseParams.append('studentId', filters.studentId);
       if (filters.transactionType) baseParams.append('transactionType', filters.transactionType);
       if (filters.paymentMethod) baseParams.append('paymentMethod', filters.paymentMethod);
@@ -469,9 +476,10 @@ const Reports = ({ currentUser }) => {
       try {
         const response = await fetch(apiUrl('/api/sql/academic/courses'));
         if (response.ok) {
-          const academicCourses = await response.json();
-          if (Array.isArray(academicCourses)) {
-            academicCourses.forEach(c => {
+          const academicCoursesData = await response.json();
+          if (Array.isArray(academicCoursesData)) {
+            setAcademicCourses(academicCoursesData);
+            academicCoursesData.forEach(c => {
               const name = typeof c === 'string' ? c : (c?.displayName || c?.name);
               if (name && typeof name === 'string' && name.trim()) {
                 const trimmed = name.trim();
@@ -594,6 +602,176 @@ const Reports = ({ currentUser }) => {
       .sort((a, b) => a.localeCompare(b));
   }, [courses, colleges, transactions, courseIdToNameMap]);
 
+  const branchOptions = useMemo(() => {
+    const branchMap = new Map();
+    const activeCourseFilter = filters.course ? filters.course.trim().toLowerCase() : '';
+
+    const addBranch = (b) => {
+      if (!b) return;
+      const bName = typeof b === 'object' ? (b?.displayName || b?.name) : String(b);
+      if (!bName || typeof bName !== 'string') return;
+      const trimmed = bName.trim();
+      if (!trimmed || /^\d+$/.test(trimmed)) return;
+      const lower = trimmed.toLowerCase();
+      const nonAcademic = ['admin office', 'admissions cell', 'office', 'central office', 'n/a', 'na', 'general', 'null', 'undefined', 'all'];
+      if (nonAcademic.includes(lower)) return;
+      if (!branchMap.has(lower)) {
+        branchMap.set(lower, trimmed);
+      }
+    };
+
+    // 1. From academicCourses master data
+    (academicCourses || []).forEach(c => {
+      const cName = typeof c === 'string' ? c : (c?.displayName || c?.name);
+      if (cName && typeof cName === 'string') {
+        let name = cName.trim();
+        if (/^diploma\s+in\s+/i.test(name)) name = 'DIPLOMA';
+        const lower = name.toLowerCase();
+        const isMatch = !activeCourseFilter || lower === activeCourseFilter || lower.startsWith(activeCourseFilter + ' in');
+        if (isMatch) {
+          (c.branches || []).forEach(b => addBranch(b));
+        }
+      }
+    });
+
+    // 2. From loaded transactions
+    (transactions || []).forEach(t => {
+      const s = t.student;
+      if (s) {
+        let cName = (s.course || '').trim();
+        if (/^diploma\s+in\s+/i.test(cName)) cName = 'DIPLOMA';
+        const lower = cName.toLowerCase();
+        const isMatch = !activeCourseFilter || lower === activeCourseFilter || lower.startsWith(activeCourseFilter + ' in');
+        if (isMatch && s.branch) {
+          addBranch(s.branch);
+        }
+      }
+    });
+
+    return Array.from(branchMap.values()).sort((a, b) => a.localeCompare(b));
+  }, [academicCourses, transactions, filters.course]);
+
+  const yearOptions = useMemo(() => {
+    const yearSet = new Set([1, 2, 3, 4]);
+    const activeCourseFilter = filters.course ? filters.course.trim().toLowerCase() : '';
+
+    (academicCourses || []).forEach(c => {
+      const cName = typeof c === 'string' ? c : (c?.displayName || c?.name);
+      if (cName && typeof cName === 'string') {
+        let name = cName.trim();
+        if (/^diploma\s+in\s+/i.test(name)) name = 'DIPLOMA';
+        const lower = name.toLowerCase();
+        const isMatch = !activeCourseFilter || lower === activeCourseFilter || lower.startsWith(activeCourseFilter + ' in');
+        if (isMatch) {
+          (c.years || []).forEach(y => {
+            const num = Number(y);
+            if (!Number.isNaN(num) && num > 0) yearSet.add(num);
+          });
+        }
+      }
+    });
+
+    (transactions || []).forEach(t => {
+      const s = t.student;
+      if (s) {
+        let cName = (s.course || '').trim();
+        if (/^diploma\s+in\s+/i.test(cName)) cName = 'DIPLOMA';
+        const lower = cName.toLowerCase();
+        const isMatch = !activeCourseFilter || lower === activeCourseFilter || lower.startsWith(activeCourseFilter + ' in');
+        if (isMatch && s.year) {
+          const num = Number(s.year);
+          if (!Number.isNaN(num) && num > 0) yearSet.add(num);
+        }
+      }
+    });
+
+    return Array.from(yearSet).filter(y => !Number.isNaN(y) && y > 0).sort((a, b) => a - b);
+  }, [academicCourses, transactions, filters.course]);
+
+  const reportBranchOptions = useMemo(() => {
+    const branchMap = new Map();
+    const activeCourseFilter = reportFilters.course ? reportFilters.course.trim().toLowerCase() : '';
+
+    const addBranch = (b) => {
+      if (!b) return;
+      const bName = typeof b === 'object' ? (b?.displayName || b?.name) : String(b);
+      if (!bName || typeof bName !== 'string') return;
+      const trimmed = bName.trim();
+      if (!trimmed || /^\d+$/.test(trimmed)) return;
+      const lower = trimmed.toLowerCase();
+      const nonAcademic = ['admin office', 'admissions cell', 'office', 'central office', 'n/a', 'na', 'general', 'null', 'undefined', 'all'];
+      if (nonAcademic.includes(lower)) return;
+      if (!branchMap.has(lower)) {
+        branchMap.set(lower, trimmed);
+      }
+    };
+
+    (academicCourses || []).forEach(c => {
+      const cName = typeof c === 'string' ? c : (c?.displayName || c?.name);
+      if (cName && typeof cName === 'string') {
+        let name = cName.trim();
+        if (/^diploma\s+in\s+/i.test(name)) name = 'DIPLOMA';
+        const lower = name.toLowerCase();
+        const isMatch = !activeCourseFilter || lower === activeCourseFilter || lower.startsWith(activeCourseFilter + ' in');
+        if (isMatch) {
+          (c.branches || []).forEach(b => addBranch(b));
+        }
+      }
+    });
+
+    (transactions || []).forEach(t => {
+      const s = t.student;
+      if (s) {
+        let cName = (s.course || '').trim();
+        if (/^diploma\s+in\s+/i.test(cName)) cName = 'DIPLOMA';
+        const lower = cName.toLowerCase();
+        const isMatch = !activeCourseFilter || lower === activeCourseFilter || lower.startsWith(activeCourseFilter + ' in');
+        if (isMatch && s.branch) {
+          addBranch(s.branch);
+        }
+      }
+    });
+
+    return Array.from(branchMap.values()).sort((a, b) => a.localeCompare(b));
+  }, [academicCourses, transactions, reportFilters.course]);
+
+  const reportYearOptions = useMemo(() => {
+    const yearSet = new Set([1, 2, 3, 4]);
+    const activeCourseFilter = reportFilters.course ? reportFilters.course.trim().toLowerCase() : '';
+
+    (academicCourses || []).forEach(c => {
+      const cName = typeof c === 'string' ? c : (c?.displayName || c?.name);
+      if (cName && typeof cName === 'string') {
+        let name = cName.trim();
+        if (/^diploma\s+in\s+/i.test(name)) name = 'DIPLOMA';
+        const lower = name.toLowerCase();
+        const isMatch = !activeCourseFilter || lower === activeCourseFilter || lower.startsWith(activeCourseFilter + ' in');
+        if (isMatch) {
+          (c.years || []).forEach(y => {
+            const num = Number(y);
+            if (!Number.isNaN(num) && num > 0) yearSet.add(num);
+          });
+        }
+      }
+    });
+
+    (transactions || []).forEach(t => {
+      const s = t.student;
+      if (s) {
+        let cName = (s.course || '').trim();
+        if (/^diploma\s+in\s+/i.test(cName)) cName = 'DIPLOMA';
+        const lower = cName.toLowerCase();
+        const isMatch = !activeCourseFilter || lower === activeCourseFilter || lower.startsWith(activeCourseFilter + ' in');
+        if (isMatch && s.year) {
+          const num = Number(s.year);
+          if (!Number.isNaN(num) && num > 0) yearSet.add(num);
+        }
+      }
+    });
+
+    return Array.from(yearSet).filter(y => !Number.isNaN(y) && y > 0).sort((a, b) => a - b);
+  }, [academicCourses, transactions, reportFilters.course]);
+
   useEffect(() => {
     fetchTransactions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -618,6 +796,25 @@ const Reports = ({ currentUser }) => {
         }
       }
 
+      // Filter by course
+      if (filters.course && transaction.student?.course) {
+        const c1 = transaction.student.course.trim().toLowerCase();
+        const c2 = filters.course.trim().toLowerCase();
+        if (c1 !== c2 && !c1.startsWith(c2 + ' in')) return false;
+      }
+
+      // Filter by branch
+      if (filters.branch) {
+        const sBranch = (transaction.student?.branch || transaction.employee?.division || '').trim().toLowerCase();
+        if (sBranch !== filters.branch.trim().toLowerCase()) return false;
+      }
+
+      // Filter by year
+      if (filters.year) {
+        const sYear = String(transaction.student?.year || '').trim();
+        if (sYear !== String(filters.year).trim()) return false;
+      }
+
       const matchesSearch =
         transaction.transactionId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         transaction.student?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -626,7 +823,7 @@ const Reports = ({ currentUser }) => {
         transaction.branchTransfer?.branchName?.toLowerCase().includes(searchTerm.toLowerCase());
       return matchesSearch;
     });
-  }, [transactions, searchTerm, filters.transactionType]);
+  }, [transactions, searchTerm, filters.transactionType, filters.course, filters.branch, filters.year]);
 
   // Separate student transactions and college transfers
   const studentTransactions = useMemo(() => {
@@ -1481,6 +1678,17 @@ const Reports = ({ currentUser }) => {
       });
     }
 
+    const isGeneral = reportFilters.stockType === 'distribute';
+
+    if (!isGeneral) {
+      if (reportFilters.branch) {
+        filteredTransactions = filteredTransactions.filter(t => (t.student?.branch || '').trim().toLowerCase() === reportFilters.branch.trim().toLowerCase());
+      }
+      if (reportFilters.year) {
+        filteredTransactions = filteredTransactions.filter(t => String(t.student?.year || '').trim() === String(reportFilters.year).trim());
+      }
+    }
+
     // Revenue: exclude transfers as per user requirement for PDF reports
     const revenueTransactions = filteredTransactions.filter(t => {
       const isTransfer = t.transactionType === 'college_transfer' || t.transactionType === 'branch_transfer';
@@ -1535,8 +1743,6 @@ const Reports = ({ currentUser }) => {
       format: 'a5'
     });
 
-    const isGeneral = reportFilters.stockType === 'distribute';
-
     // Headers
     pdf.setFontSize(18);
     pdf.setTextColor(44, 62, 80);
@@ -1565,6 +1771,17 @@ const Reports = ({ currentUser }) => {
           : `Until: ${reportFilters.endDate}`;
       pdf.text(dateRangeText, 14, yPos);
       yPos += 5;
+    }
+
+    if (!isGeneral && (reportFilters.course || reportFilters.branch || reportFilters.year)) {
+      pdf.setFontSize(8);
+      pdf.setFont(undefined, 'normal');
+      const filterParts = [];
+      if (reportFilters.course) filterParts.push(`Course: ${reportFilters.course.toUpperCase()}`);
+      if (reportFilters.branch) filterParts.push(`Branch: ${reportFilters.branch.toUpperCase()}`);
+      if (reportFilters.year) filterParts.push(`Year: ${reportFilters.year}`);
+      pdf.text(filterParts.join(' | '), 14, yPos);
+      yPos += 4.5;
     }
 
     // Report Info Section
@@ -1809,14 +2026,16 @@ const Reports = ({ currentUser }) => {
             { label: 'Department', x: 86, w: 48, align: 'left', textX: 88 }
           ]
         : [
-            { label: 'Date', x: 14, w: 20, align: 'left', textX: 16 },
-            { label: 'Student', x: 34, w: 36, align: 'left', textX: 36 },
-            { label: 'Course', x: 70, w: 22, align: 'left', textX: 72 },
-            { label: 'Payment', x: 92, w: 20, align: 'left', textX: 94 },
-            { label: 'Amount', x: 112, w: 22, align: 'right', textX: 132 }
+            { label: 'Date', x: 14, w: 15, align: 'left', textX: 15 },
+            { label: 'Student', x: 29, w: 27, align: 'left', textX: 30 },
+            { label: 'Course', x: 56, w: 17, align: 'left', textX: 57 },
+            { label: 'Branch', x: 73, w: 18, align: 'left', textX: 74 },
+            { label: 'Year', x: 91, w: 10, align: 'center', textX: 96 },
+            { label: 'Payment', x: 101, w: 15, align: 'left', textX: 102 },
+            { label: 'Amount', x: 116, w: 18, align: 'right', textX: 133 }
           ];
 
-      const trxDividers = isGeneral ? [40, 86] : [34, 70, 92, 112];
+      const trxDividers = isGeneral ? [40, 86] : [29, 56, 73, 91, 101, 116];
 
       const drawTrxHeader = (topY) => {
         pdf.setFillColor(235, 238, 242);
@@ -1872,17 +2091,21 @@ const Reports = ({ currentUser }) => {
         });
 
         const date = new Date(transaction.transactionDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        const studentName = (transaction.student?.name || transaction.employee?.name || 'N/A').substring(0, isGeneral ? 25 : 18);
-        const course = (transaction.student?.course || transaction.employee?.department || 'N/A').toUpperCase().substring(0, isGeneral ? 15 : 10);
+        const studentName = (transaction.student?.name || transaction.employee?.name || 'N/A').substring(0, isGeneral ? 25 : 14);
+        const course = (transaction.student?.course || transaction.employee?.department || 'N/A').toUpperCase().substring(0, isGeneral ? 15 : 8);
+        const branch = (transaction.student?.branch || transaction.employee?.division || '-').toUpperCase().substring(0, 9);
+        const year = transaction.student?.year ? `Y${transaction.student.year}` : '-';
         const amount = formatCurrencyForPDF(transaction.totalAmount);
         const payment = transaction.paymentMethod ? transaction.paymentMethod.toUpperCase() : 'N/A';
 
-        pdf.text(date, 16, textY);
-        pdf.text(studentName, isGeneral ? 42 : 36, textY);
-        pdf.text(course, isGeneral ? 88 : 72, textY);
+        pdf.text(date, isGeneral ? 16 : 15, textY);
+        pdf.text(studentName, isGeneral ? 42 : 30, textY);
+        pdf.text(course, isGeneral ? 88 : 57, textY);
         if (!isGeneral) {
-          pdf.text(payment, 94, textY);
-          pdf.text(amount, 132, textY, { align: 'right' });
+          pdf.text(branch, 74, textY);
+          pdf.text(year, 96, textY, { align: 'center' });
+          pdf.text(payment, 102, textY);
+          pdf.text(amount, 133, textY, { align: 'right' });
         }
         yPos += trxRowH;
       });
@@ -2478,6 +2701,8 @@ const Reports = ({ currentUser }) => {
         queryParams.append('all', 'true');
         queryParams.append('limit', 'all');
         if (reportFilters.course && !isGeneral) queryParams.append('course', reportFilters.course);
+        if (reportFilters.branch && !isGeneral) queryParams.append('branch', reportFilters.branch);
+        if (reportFilters.year && !isGeneral) queryParams.append('year', reportFilters.year);
         if (reportFilters.paymentMethod) queryParams.append('paymentMethod', reportFilters.paymentMethod);
         if (reportFilters.isPaid !== '') queryParams.append('isPaid', reportFilters.isPaid);
         if (reportFilters.startDate) queryParams.append('startDate', reportFilters.startDate);
@@ -2557,6 +2782,15 @@ const Reports = ({ currentUser }) => {
             }
             return true;
           });
+        }
+
+        if (!isGeneral) {
+          if (reportFilters.branch) {
+            reportTransactions = reportTransactions.filter(t => (t.student?.branch || '').trim().toLowerCase() === reportFilters.branch.trim().toLowerCase());
+          }
+          if (reportFilters.year) {
+            reportTransactions = reportTransactions.filter(t => String(t.student?.year || '').trim() === String(reportFilters.year).trim());
+          }
         }
 
         // Check if only day-end sales summary is selected (without PDF generation)
@@ -2735,12 +2969,32 @@ const Reports = ({ currentUser }) => {
                   </div>
                   <select
                     value={filters.course}
-                    onChange={(e) => setFilters({ ...filters, course: e.target.value })}
+                    onChange={(e) => setFilters({ ...filters, course: e.target.value, branch: '', year: '' })}
                     className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[150px]"
                   >
                     <option value="">All Courses</option>
                     {courseOptions.map(course => (
                       <option key={course} value={course}>{course.toUpperCase()}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={filters.branch}
+                    onChange={(e) => setFilters({ ...filters, branch: e.target.value })}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[150px]"
+                  >
+                    <option value="">All Branches</option>
+                    {branchOptions.map(branch => (
+                      <option key={branch} value={branch}>{branch.toUpperCase()}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={filters.year}
+                    onChange={(e) => setFilters({ ...filters, year: e.target.value })}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[130px]"
+                  >
+                    <option value="">All Years</option>
+                    {yearOptions.map(year => (
+                      <option key={year} value={String(year)}>Year {year}</option>
                     ))}
                   </select>
                   <select
@@ -3039,6 +3293,7 @@ const Reports = ({ currentUser }) => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Student</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Course</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Branch</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Year</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Items</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Method</th>
@@ -3061,6 +3316,9 @@ const Reports = ({ currentUser }) => {
                                   </td>
                                   <td className="px-6 py-4 whitespace-nowrap">
                                     <span className="text-sm text-gray-900">{(transaction.student?.branch || transaction.employee?.division || 'N/A').toUpperCase()}</span>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap">
+                                    <span className="text-sm text-gray-900">{transaction.student?.year ? `Year ${transaction.student.year}` : (transaction.employee ? '-' : 'N/A')}</span>
                                   </td>
                                   <td className="px-6 py-4">
                                     <span className="text-sm text-gray-900">
@@ -4429,6 +4687,8 @@ const Reports = ({ currentUser }) => {
                             ...prev,
                             startDate: getTodayDate(),
                             endDate: getTodayDate(),
+                            branch: '',
+                            year: '',
                           }));
                         }}
                         className="p-6 border-2 border-gray-200 rounded-xl hover:border-purple-500 hover:bg-purple-50 transition-all text-left"
@@ -4574,7 +4834,7 @@ const Reports = ({ currentUser }) => {
                               <label className="block text-sm font-medium text-gray-700 mb-2">Course</label>
                               <select
                                 value={reportFilters.course}
-                                onChange={(e) => setReportFilters({ ...reportFilters, course: e.target.value })}
+                                onChange={(e) => setReportFilters({ ...reportFilters, course: e.target.value, branch: '', year: '' })}
                                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                               >
                                 <option value="">All Courses</option>
@@ -4582,6 +4842,34 @@ const Reports = ({ currentUser }) => {
                                   <option key={course} value={course}>{course.toUpperCase()}</option>
                                 ))}
                               </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Branch</label>
+                                <select
+                                  value={reportFilters.branch}
+                                  onChange={(e) => setReportFilters({ ...reportFilters, branch: e.target.value })}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                  <option value="">All Branches</option>
+                                  {reportBranchOptions.map(branch => (
+                                    <option key={branch} value={branch}>{branch.toUpperCase()}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">Year</label>
+                                <select
+                                  value={reportFilters.year}
+                                  onChange={(e) => setReportFilters({ ...reportFilters, year: e.target.value })}
+                                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                  <option value="">All Years</option>
+                                  {reportYearOptions.map(year => (
+                                    <option key={year} value={String(year)}>Year {year}</option>
+                                  ))}
+                                </select>
+                              </div>
                             </div>
                             <div>
                               <label className="block text-sm font-medium text-gray-700 mb-2">Payment Method</label>
