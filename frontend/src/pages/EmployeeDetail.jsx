@@ -381,10 +381,10 @@ const EmployeeDetail = ({ products = [], setProducts, currentUser, isOnline }) =
                                                                     type="button"
                                                                     onClick={() => handleOpenDateEdit(transaction)}
                                                                     className="flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors text-xs font-semibold shadow-sm no-print"
-                                                                    title="Edit Transaction Date (Super Admin Only)"
+                                                                    title="Edit Transaction (Super Admin Only)"
                                                                 >
                                                                     <Pencil size={13} />
-                                                                    Edit Date
+                                                                    Edit
                                                                 </button>
                                                             )}
                                                             <button

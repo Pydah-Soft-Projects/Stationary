@@ -579,6 +579,14 @@ const createTransaction = asyncHandler(async (req, res) => {
   const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
   const transactionId = `TXN-${timestamp}-${randomStr}`;
 
+  let initialTxDate = new Date();
+  if (req.body.transactionDate) {
+    const parsedDate = new Date(req.body.transactionDate);
+    if (!isNaN(parsedDate.getTime()) && parsedDate.getTime() <= Date.now() + 60 * 1000) {
+      initialTxDate = parsedDate;
+    }
+  }
+
   // Create transaction
   const transactionData = {
     transactionId,
@@ -588,9 +596,9 @@ const createTransaction = asyncHandler(async (req, res) => {
     totalAmount,
     paymentMethod: paymentMethod || 'cash',
     isPaid: isPaid || false,
-    paidAt: isPaid ? new Date() : null,
+    paidAt: isPaid ? initialTxDate : null,
     stockDeducted: Boolean(isPaid && stockChanges.size > 0),
-    transactionDate: new Date(),
+    transactionDate: initialTxDate,
     remarks: remarks || '',
     createdBy: createdBy || req.user?._id || null,
     createdByName: (createdByName || req.user?.name || '').trim(),
@@ -606,6 +614,18 @@ const createTransaction = asyncHandler(async (req, res) => {
   }
 
   const transaction = await Transaction.create(transactionData);
+
+  if (req.body.transactionDate && initialTxDate) {
+    try {
+      await Transaction.collection.updateOne(
+        { _id: transaction._id },
+        { $set: { createdAt: initialTxDate } }
+      );
+      transaction.createdAt = initialTxDate;
+    } catch (syncErr) {
+      // Non-blocking
+    }
+  }
 
   // Record real-time User Activity Audit for this distribution
   try {
