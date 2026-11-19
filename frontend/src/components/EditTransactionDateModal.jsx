@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Calendar, Clock, X, ChevronLeft, ChevronRight, Loader2, AlertCircle, CheckCircle2, Ban } from 'lucide-react';
+import { Calendar, Clock, X, ChevronLeft, ChevronRight, Loader2, AlertCircle, CheckCircle2, Ban, CreditCard, IndianRupee, Package } from 'lucide-react';
 import { apiUrl } from '../utils/api';
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -54,7 +54,14 @@ const EditTransactionDateModal = ({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // Initialize selected date when modal opens with transaction
+  // Payment details & remarks state
+  const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [isPaid, setIsPaid] = useState(true);
+  const [remarks, setRemarks] = useState('');
+  const [cashAmount, setCashAmount] = useState(0);
+  const [onlineAmount, setOnlineAmount] = useState(0);
+
+  // Initialize selected date and payment details when modal opens with transaction
   useEffect(() => {
     if (isOpen && transaction) {
       const initialStr = currentTxDateStr <= maxAllowedDateStr ? currentTxDateStr : maxAllowedDateStr;
@@ -69,6 +76,17 @@ const EditTransactionDateModal = ({
         setViewYear(maxYear);
         setViewMonth(maxMonthIndex);
       }
+
+      // Initialize payment details from transaction
+      const method = transaction.paymentMethod || 'cash';
+      setPaymentMethod(method);
+      setIsPaid(transaction.isPaid !== undefined ? Boolean(transaction.isPaid) : true);
+      setRemarks(transaction.remarks || '');
+      const total = Number(transaction.totalAmount || 0);
+      const initCash = transaction.cashAmount !== undefined ? Number(transaction.cashAmount) : (method === 'online' ? 0 : total);
+      const initOnline = transaction.onlineAmount !== undefined ? Number(transaction.onlineAmount) : (method === 'cash' ? 0 : total);
+      setCashAmount(initCash);
+      setOnlineAmount(initOnline);
     }
   }, [isOpen, transaction, currentTxDateStr, maxAllowedDateStr, maxYear, maxMonthIndex]);
 
@@ -198,23 +216,31 @@ const EditTransactionDateModal = ({
 
     try {
       const transactionId = transaction._id || transaction.id;
+      const total = Number(transaction.totalAmount || 0);
+      const payload = {
+        transactionDate: finalDate.toISOString(),
+        paymentMethod,
+        isPaid,
+        remarks: remarks || '',
+        cashAmount: paymentMethod === 'split' ? (Number(cashAmount) || 0) : (paymentMethod === 'cash' ? total : 0),
+        onlineAmount: paymentMethod === 'split' ? (Number(onlineAmount) || 0) : (paymentMethod === 'online' ? total : 0),
+        updatedBy: {
+          _id: currentUser?._id,
+          name: currentUser?.name || 'Administrator',
+          empNo: currentUser?.empNo || currentUser?.employee_no || '',
+          role: currentUser?.role || 'Administrator',
+        },
+      };
+
       const response = await fetch(apiUrl(`/api/transactions/${transactionId}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          transactionDate: finalDate.toISOString(),
-          updatedBy: {
-            _id: currentUser?._id,
-            name: currentUser?.name || 'Administrator',
-            empNo: currentUser?.empNo || currentUser?.employee_no || '',
-            role: currentUser?.role || 'Administrator',
-          },
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Failed to update transaction date' }));
-        throw new Error(errorData.message || 'Failed to update transaction date');
+        const errorData = await response.json().catch(() => ({ message: 'Failed to update transaction' }));
+        throw new Error(errorData.message || 'Failed to update transaction');
       }
 
       const updated = await response.json();
@@ -223,8 +249,8 @@ const EditTransactionDateModal = ({
       }
       onClose();
     } catch (err) {
-      console.error('Failed to update transaction date:', err);
-      setError(err.message || 'Failed to update transaction date. Please try again.');
+      console.error('Failed to update transaction:', err);
+      setError(err.message || 'Failed to update transaction. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -249,7 +275,7 @@ const EditTransactionDateModal = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-blue-100 overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-blue-100 overflow-hidden">
         {/* Header */}
         <div className="px-5 py-4 bg-gradient-to-r from-blue-700 to-indigo-800 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -257,7 +283,7 @@ const EditTransactionDateModal = ({
               <Calendar size={18} />
             </div>
             <div>
-              <h3 className="font-bold text-sm">Edit Transaction Date</h3>
+              <h3 className="font-bold text-sm">Edit Transaction Date & Payment</h3>
               <p className="text-[11px] text-blue-200">Super Admin Portal • Past Dates Only</p>
             </div>
           </div>
@@ -552,6 +578,172 @@ const EditTransactionDateModal = ({
             </div>
           )}
 
+          {/* Transaction Items Summary */}
+          {transaction.items && transaction.items.length > 0 && (
+            <div className="border border-gray-200 rounded-xl p-3 bg-gray-50/70 space-y-2">
+              <div className="flex items-center justify-between text-xs font-semibold text-gray-700">
+                <span className="flex items-center gap-1.5 text-gray-900 font-bold">
+                  <Package size={14} className="text-blue-600" />
+                  Transaction Items ({transaction.items.length})
+                </span>
+                <span className="font-bold text-gray-900">
+                  Total: ₹{Number(transaction.totalAmount || 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                {transaction.items.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between text-xs bg-white p-2 rounded-lg border border-gray-200 shadow-2xs">
+                    <span className="font-medium text-gray-800 truncate mr-2">
+                      {item.name || 'Item'}
+                    </span>
+                    <span className="text-gray-600 shrink-0 font-bold">
+                      Qty: {item.quantity} • ₹{Number(item.total || (item.price * item.quantity) || 0).toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Payment Details Section (matches receipt modal options) */}
+          <div className="p-4 bg-emerald-50/50 rounded-xl border border-emerald-200/80 shadow-2xs space-y-3.5">
+            <h3 className="text-xs font-bold text-gray-900 flex items-center gap-2">
+              <div className="w-6 h-6 bg-[#3b6d57] text-white rounded-lg flex items-center justify-center">
+                <CreditCard size={13} />
+              </div>
+              Payment Details
+            </h3>
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* Payment Method Toggle */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">Payment Method</label>
+                <div className="inline-flex items-center bg-white border border-gray-200 rounded-lg p-0.5 w-full shadow-2xs">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod('cash');
+                      setCashAmount(Number(transaction.totalAmount || 0));
+                      setOnlineAmount(0);
+                    }}
+                    className={`flex-1 px-2 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      paymentMethod === 'cash'
+                        ? 'bg-[#3b6d57] text-white shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    Cash
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod('online');
+                      setOnlineAmount(Number(transaction.totalAmount || 0));
+                      setCashAmount(0);
+                    }}
+                    className={`flex-1 px-2 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      paymentMethod === 'online'
+                        ? 'bg-[#3b6d57] text-white shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    Online
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod('split');
+                      const total = Number(transaction.totalAmount || 0);
+                      const half = Math.round(total / 2);
+                      setCashAmount(half);
+                      setOnlineAmount(total - half);
+                    }}
+                    className={`flex-1 px-2 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      paymentMethod === 'split'
+                        ? 'bg-[#3b6d57] text-white shadow-xs'
+                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                    }`}
+                  >
+                    Split
+                  </button>
+                </div>
+              </div>
+
+              {/* Payment Status */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">Payment Status</label>
+                <div
+                  onClick={() => setIsPaid(!isPaid)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-lg border border-gray-200 h-[34px] cursor-pointer hover:border-gray-300 transition-colors shadow-2xs"
+                >
+                  <input
+                    type="checkbox"
+                    id="edit-modal-paid"
+                    checked={isPaid}
+                    onChange={(e) => setIsPaid(e.target.checked)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer"
+                  />
+                  <label htmlFor="edit-modal-paid" className="font-semibold text-xs text-gray-800 cursor-pointer">
+                    Mark as Paid
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            {/* Split Amount Inputs */}
+            {paymentMethod === 'split' && (
+              <div className="grid grid-cols-2 gap-3 p-2.5 bg-white rounded-lg border border-gray-200 shadow-2xs">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Cash Amount</label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" size={12} />
+                    <input
+                      type="number"
+                      value={cashAmount}
+                      onChange={(e) => {
+                        const total = Number(transaction.totalAmount || 0);
+                        const val = Math.min(total, Math.max(0, parseFloat(e.target.value) || 0));
+                        setCashAmount(val);
+                        setOnlineAmount(Math.max(0, total - val));
+                      }}
+                      className="w-full pl-6 pr-2 py-1 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-emerald-500 outline-none font-bold"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-gray-500 mb-1">Online Amount</label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" size={12} />
+                    <input
+                      type="number"
+                      value={onlineAmount}
+                      onChange={(e) => {
+                        const total = Number(transaction.totalAmount || 0);
+                        const val = Math.min(total, Math.max(0, parseFloat(e.target.value) || 0));
+                        setOnlineAmount(val);
+                        setCashAmount(Math.max(0, total - val));
+                      }}
+                      className="w-full pl-6 pr-2 py-1 text-xs border border-gray-200 rounded focus:ring-1 focus:ring-emerald-500 outline-none font-bold"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Remarks */}
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Remarks (Optional)</label>
+              <input
+                type="text"
+                placeholder="Add any remarks..."
+                value={remarks}
+                onChange={(e) => setRemarks(e.target.value)}
+                className="w-full px-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+              />
+            </div>
+          </div>
+
           {/* Error Message */}
           {error && (
             <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium flex items-center gap-1.5">
@@ -582,7 +774,7 @@ const EditTransactionDateModal = ({
                   <span>Saving...</span>
                 </>
               ) : (
-                <span>Save Date</span>
+                <span>Save Changes</span>
               )}
             </button>
           </div>

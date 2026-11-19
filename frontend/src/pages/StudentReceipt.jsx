@@ -43,6 +43,13 @@ const StudentReceiptModal = ({
   const resolvedOnlineStatus = useOnlineStatus();
   const isOnline = typeof isOnlineProp === 'boolean' ? isOnlineProp : resolvedOnlineStatus;
 
+  const todayDateStr = useMemo(() => {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }, []);
+  const [customTxDate, setCustomTxDate] = useState('');
+
   // Prefill items when prefilledItems prop is provided
   useEffect(() => {
     setItemSearch('');
@@ -581,6 +588,7 @@ const StudentReceiptModal = ({
           paymentMethod,
           isPaid,
           remarks,
+          transactionDate: customTxDate && customTxDate !== todayDateStr ? new Date(`${customTxDate}T${new Date().toTimeString().split(' ')[0]}`).toISOString() : undefined,
           createdBy: currentUser?.id,
           createdByName: currentUser?.employeeName || currentUser?.name || currentUser?.username || '',
           createdByEmpNo: currentUser?.empNo || currentUser?.emp_no || '',
@@ -989,6 +997,36 @@ const StudentReceiptModal = ({
                       rows={2}
                     />
                   </div>
+
+                  {/* Transaction Date Option */}
+                  <div className="mt-3 col-span-2 pt-2.5 border-t border-blue-100">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-medium text-gray-700 flex items-center gap-1.5">
+                        <Calendar size={13} className="text-blue-600" />
+                        <span>Transaction Date (Past Dates Only)</span>
+                      </label>
+                      {customTxDate && customTxDate !== todayDateStr && (
+                        <button
+                          type="button"
+                          onClick={() => setCustomTxDate(todayDateStr)}
+                          className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold cursor-pointer"
+                        >
+                          Reset to Today
+                        </button>
+                      )}
+                    </div>
+                    <input
+                      type="date"
+                      max={todayDateStr}
+                      value={customTxDate || todayDateStr}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (!val) setCustomTxDate(todayDateStr);
+                        else if (val <= todayDateStr) setCustomTxDate(val);
+                      }}
+                      className="w-full px-3 py-1.5 border border-blue-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium cursor-pointer"
+                    />
+                  </div>
                 </div>
               )}
             </div>
@@ -1089,7 +1127,7 @@ const StudentReceiptModal = ({
                     {/* Date */}
                     <div className="pt-2 border-t border-gray-200">
                       <p className="text-xs text-blue-600 text-right">
-                        {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {(customTxDate ? new Date(customTxDate) : new Date()).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                       </p>
                     </div>
                   </div>
