@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react';
 import { useReactToPrint } from 'react-to-print';
-import { Package, Search, Plus, Trash2, Eye, Save, FileText, UserPlus, Building2, ShoppingCart, Minus, X, Printer, LayoutGrid, List, History, Calendar, DollarSign, BarChart3, ChevronDown, ChevronRight, Pencil } from 'lucide-react';
+import { Package, Search, Plus, Trash2, Eye, Save, FileText, UserPlus, Building2, ShoppingCart, Minus, X, Printer, LayoutGrid, List, History, Calendar, DollarSign, BarChart3, ChevronDown, ChevronRight, Pencil, Check, Loader2, User } from 'lucide-react';
 import { apiUrl } from '../utils/api';
 
 const emptyReportSummary = () => ({
@@ -25,6 +25,290 @@ const AUTHORITIES = [
     "Nithya medam",
     "Sriram Sir"
 ];
+
+// Searchable authority dropdown supporting default authorities and live HRMS employee search
+const AuthorizedBySelect = ({ value, onChange, required = false, size = 'md' }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [hrmsResults, setHrmsResults] = useState([]);
+    const [searching, setSearching] = useState(false);
+    const containerRef = useRef(null);
+    const searchInputRef = useRef(null);
+
+    // Close on click outside
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (containerRef.current && !containerRef.current.contains(e.target)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    // Focus search input when dropdown opens, clear search when it closes
+    useEffect(() => {
+        if (isOpen) {
+            setTimeout(() => {
+                searchInputRef.current?.focus();
+            }, 60);
+        } else {
+            setSearchQuery('');
+            setHrmsResults([]);
+        }
+    }, [isOpen]);
+
+    // Debounced HRMS search
+    useEffect(() => {
+        const trimmed = searchQuery.trim();
+        if (trimmed.length < 2) {
+            setHrmsResults([]);
+            setSearching(false);
+            return;
+        }
+
+        const timer = setTimeout(async () => {
+            setSearching(true);
+            try {
+                const res = await fetch(apiUrl(`/api/employees?search=${encodeURIComponent(trimmed)}&limit=10`));
+                if (res.ok) {
+                    const data = await res.json();
+                    const rows = data.rows || (Array.isArray(data) ? data : []);
+                    setHrmsResults(rows);
+                }
+            } catch (err) {
+                console.warn('Failed to search HRMS employees:', err);
+            } finally {
+                setSearching(false);
+            }
+        }, 250);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    // Filter standard authorities by query
+    const filteredAuthorities = useMemo(() => {
+        const q = searchQuery.trim().toLowerCase();
+        if (!q) return AUTHORITIES;
+        return AUTHORITIES.filter(auth => auth.toLowerCase().includes(q));
+    }, [searchQuery]);
+
+    const handleSelectEmployee = (emp) => {
+        const designation = emp.designation && emp.designation !== 'N/A' ? emp.designation : '';
+        const dept = emp.department && emp.department !== 'N/A' ? emp.department : '';
+        const empNo = emp.empNo && emp.empNo !== 'N/A' ? emp.empNo : '';
+
+        const subtitle = designation || dept || empNo;
+        const formatted = subtitle ? `${emp.name} (${subtitle})` : emp.name;
+        onChange(formatted);
+        setIsOpen(false);
+    };
+
+    const handleSelectAuthority = (auth) => {
+        onChange(auth);
+        setIsOpen(false);
+    };
+
+    const handleCustomSelect = () => {
+        if (searchQuery.trim()) {
+            onChange(searchQuery.trim());
+            setIsOpen(false);
+        }
+    };
+
+    const isSmall = size === 'sm';
+
+    return (
+        <div ref={containerRef} className="relative w-full">
+            {/* Hidden native input for required form validation */}
+            {required && (
+                <input
+                    type="text"
+                    required
+                    tabIndex={-1}
+                    value={value || ''}
+                    onChange={() => {}}
+                    className="sr-only"
+                    onFocus={() => setIsOpen(true)}
+                />
+            )}
+
+            {/* Trigger Button */}
+            <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setIsOpen(prev => !prev)}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setIsOpen(prev => !prev);
+                    }
+                }}
+                className={`w-full flex items-center justify-between border rounded-lg bg-white cursor-pointer transition-all ${
+                    isOpen
+                        ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-sm'
+                        : 'border-gray-300 hover:border-gray-400'
+                } ${isSmall ? 'px-3 py-2 text-sm' : 'px-3 py-2 text-base'}`}
+            >
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <User size={isSmall ? 15 : 17} className={value ? 'text-blue-600 shrink-0' : 'text-gray-400 shrink-0'} />
+                    {value ? (
+                        <span className="font-medium text-gray-900 truncate">{value}</span>
+                    ) : (
+                        <span className="text-gray-400 truncate">Select or search authority (HRMS)...</span>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0 ml-2">
+                    {value && (
+                        <span
+                            role="button"
+                            tabIndex={0}
+                            title="Clear authority"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onChange('');
+                            }}
+                            className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                        >
+                            <X size={14} />
+                        </span>
+                    )}
+                    <ChevronDown
+                        size={16}
+                        className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-600' : ''}`}
+                    />
+                </div>
+            </div>
+
+            {/* Dropdown Menu */}
+            {isOpen && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl shadow-2xl z-50 overflow-hidden text-sm animate-fadeIn">
+                    {/* Search Input Box */}
+                    <div className="p-2.5 bg-slate-50 border-b border-gray-200">
+                        <div className="relative">
+                            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                            <input
+                                ref={searchInputRef}
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search by name, emp ID or dept in HRMS..."
+                                className="w-full pl-9 pr-8 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                            {searchQuery && (
+                                <button
+                                    type="button"
+                                    onClick={() => setSearchQuery('')}
+                                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                                >
+                                    <X size={13} />
+                                </button>
+                            )}
+                        </div>
+                        {searching && (
+                            <div className="flex items-center gap-1.5 text-[11px] text-blue-600 mt-1.5 px-1 font-medium">
+                                <Loader2 size={12} className="animate-spin" />
+                                <span>Searching HRMS employee database...</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Scrollable Options List */}
+                    <div className="max-h-64 overflow-y-auto divide-y divide-gray-100">
+                        {/* Section 1: HRMS Search Results (Active when query >= 2) */}
+                        {searchQuery.trim().length >= 2 && (
+                            <div className="p-1">
+                                <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50/70 rounded-md mb-1 flex items-center justify-between">
+                                    <span>HRMS Employees</span>
+                                    <span>{hrmsResults.length} found</span>
+                                </div>
+                                {hrmsResults.length > 0 ? (
+                                    hrmsResults.map((emp) => {
+                                        const subtitle = [
+                                            emp.designation && emp.designation !== 'N/A' ? emp.designation : null,
+                                            emp.department && emp.department !== 'N/A' ? emp.department : null,
+                                        ].filter(Boolean).join(' • ');
+
+                                        return (
+                                            <div
+                                                key={emp.id || emp.empNo}
+                                                onClick={() => handleSelectEmployee(emp)}
+                                                className="px-2.5 py-2 hover:bg-blue-50 cursor-pointer rounded-lg flex items-center justify-between group transition-colors"
+                                            >
+                                                <div className="min-w-0 pr-2">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="font-semibold text-gray-900 truncate text-xs">{emp.name}</span>
+                                                        {emp.empNo && emp.empNo !== 'N/A' && (
+                                                            <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-1 rounded">
+                                                                {emp.empNo}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {subtitle && (
+                                                        <div className="text-[11px] text-gray-500 truncate mt-0.5">{subtitle}</div>
+                                                    )}
+                                                </div>
+                                                <span className="text-[11px] font-medium text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                    Select
+                                                </span>
+                                            </div>
+                                        );
+                                    })
+                                ) : !searching ? (
+                                    <div className="px-3 py-2 text-xs text-gray-500 italic">
+                                        No HRMS employees found for &ldquo;{searchQuery}&rdquo;
+                                    </div>
+                                ) : null}
+                            </div>
+                        )}
+
+                        {/* Custom value shortcut if searchQuery doesn't match standard */}
+                        {searchQuery.trim().length > 0 && !filteredAuthorities.includes(searchQuery.trim()) && (
+                            <div className="p-1 bg-amber-50/40">
+                                <div
+                                    onClick={handleCustomSelect}
+                                    className="px-2.5 py-1.5 text-xs text-amber-900 hover:bg-amber-100/60 rounded-lg cursor-pointer flex items-center justify-between font-medium"
+                                >
+                                    <span className="truncate">Use &ldquo;{searchQuery.trim()}&rdquo;</span>
+                                    <span className="text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded font-semibold shrink-0">Custom</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Section 2: Standard Authorities */}
+                        <div className="p-1">
+                            <div className="px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-gray-50 rounded-md mb-1">
+                                Standard Authorities {searchQuery ? `(${filteredAuthorities.length})` : ''}
+                            </div>
+                            {filteredAuthorities.length > 0 ? (
+                                filteredAuthorities.map((auth, idx) => {
+                                    const isSelected = value === auth;
+                                    return (
+                                        <div
+                                            key={idx}
+                                            onClick={() => handleSelectAuthority(auth)}
+                                            className={`px-2.5 py-1.5 hover:bg-gray-100 cursor-pointer rounded-lg flex items-center justify-between text-xs transition-colors ${
+                                                isSelected ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-gray-800'
+                                            }`}
+                                        >
+                                            <span className="truncate">{auth}</span>
+                                            {isSelected && <Check size={14} className="text-blue-600 shrink-0 ml-1.5" />}
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <div className="px-3 py-2 text-xs text-gray-400 italic">
+                                    No standard authorities match &ldquo;{searchQuery}&rdquo;
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const GeneralStock = ({ currentUser }) => {
     const [activeTab, setActiveTab] = useState('products');
@@ -547,6 +831,12 @@ const GeneralStock = ({ currentUser }) => {
         setLoading(true);
         setMessage({ type: '', text: '' });
 
+        if (!distributionForm.authorizedBy || !distributionForm.authorizedBy.trim()) {
+            setMessage({ type: 'error', text: 'Please select or search who authorized this distribution' });
+            setLoading(false);
+            return;
+        }
+
         let finalCollegeId = distributionForm.collegeId;
 
         // Ensure sub-admins always use their assigned college
@@ -670,6 +960,11 @@ const GeneralStock = ({ currentUser }) => {
 
     // Edit distribution: update all fields + quantities (stock adjusted on backend)
     const handleEditDistributionSave = async (id, updatedItems, formData) => {
+        if (!formData.authorizedBy || !formData.authorizedBy.trim()) {
+            setMessage({ type: 'error', text: 'Authorized By is required' });
+            return;
+        }
+
         setLoading(true);
         try {
             const res = await fetch(apiUrl(`/api/general-distributions/${id}`), {
@@ -1590,19 +1885,11 @@ const DistributeTab = ({
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-800 mb-1">Authorized By *</label>
-                            <select
-                                required
+                            <AuthorizedBySelect
                                 value={distributionForm.authorizedBy}
-                                onChange={(e) => setDistributionForm({ ...distributionForm, authorizedBy: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white"
-                            >
-                                <option value="">Select Authority</option>
-                                {AUTHORITIES.map((auth, idx) => (
-                                    <option key={idx} value={auth}>
-                                        {auth}
-                                    </option>
-                                ))}
-                            </select>
+                                onChange={(val) => setDistributionForm({ ...distributionForm, authorizedBy: val })}
+                                required
+                            />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-800 mb-1">Contact Number</label>
@@ -3188,16 +3475,12 @@ const HistoryTab = ({
                                         {/* Authorized By */}
                                         <div className="md:col-span-2">
                                             <label className="block text-xs font-medium text-gray-700 mb-1">Authorized By *</label>
-                                            <select
+                                            <AuthorizedBySelect
                                                 value={editForm.authorizedBy || ''}
-                                                onChange={(e) => setEditForm(f => ({ ...f, authorizedBy: e.target.value }))}
-                                                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-400 focus:border-transparent bg-white"
-                                            >
-                                                <option value="">Select Authority</option>
-                                                {AUTHORITIES.map((auth, idx) => (
-                                                    <option key={idx} value={auth}>{auth}</option>
-                                                ))}
-                                            </select>
+                                                onChange={(val) => setEditForm(f => ({ ...f, authorizedBy: val }))}
+                                                required
+                                                size="sm"
+                                            />
                                         </div>
 
                                         {/* Contact Number */}
