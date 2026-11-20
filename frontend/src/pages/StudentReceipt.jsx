@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState, useEffect } from 'react';
-import { Printer, X, Download, Save, Plus, Minus, Package, CreditCard, Receipt, Loader2, Search, IndianRupee } from 'lucide-react';
+import { Printer, X, Download, Save, Plus, Minus, Package, CreditCard, Receipt, Loader2, Search, IndianRupee, Calendar } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { useReactToPrint } from 'react-to-print';
 import jsPDF from 'jspdf';
